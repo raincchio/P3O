@@ -4,6 +4,7 @@
 # install mujuco
 
 Download MuJoCo[https://github.com/deepmind/mujoco/releases]
+
 For example, we can downloand mujoco210-linux-x86_64.tar.gz for linux
 
 ```bash
@@ -14,7 +15,7 @@ mv mujoco210 ~/.mujoco
 ```
 
 
-# install virtual env using Miniconda
+# create virtual env using Miniconda
 ```bash
 conda create -n p3o python=3.6
 conda active p3o
