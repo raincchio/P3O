@@ -88,7 +88,7 @@ class Model(object):
 
         fr_kl_loss = kl_coef*oldpi.pd.kl(train_model.pd)
 
-        pg_losses2 = -ADV*tf.sigmoid(tf.log(ratio))
+        pg_losses2 = -ADV*tf.sigmoid(4*ratio - 4)
 
         pg_loss = tf.reduce_mean(pg_losses2)
 
