@@ -4,6 +4,7 @@
 # install mujuco
 
 Download MuJoCo[https://github.com/deepmind/mujoco/releases]
+
 For example, we can downloand mujoco210-linux-x86_64.tar.gz for linux
 
 ```bash
