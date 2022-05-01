@@ -1,4 +1,4 @@
-# P3O
+# Preconditioner Proximal Policy Optimization
 
 
 # install mujuco
