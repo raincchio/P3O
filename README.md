@@ -1,5 +1,8 @@
 # Preconditioner Proximal Policy Optimization
 
+```bash
+sudo apt-get install libglew-dev patchelf
+```
 
 # install mujuco
 
@@ -12,6 +15,7 @@ tar -xvf  mujoco210-linux-x86_64.tar.gz
 cd  mujoco210-linux-x86_64
 mkdir ~/.mujoco
 mv mujoco210 ~/.mujoco
+
 ```
 
 
