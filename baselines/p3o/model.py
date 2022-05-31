@@ -62,11 +62,19 @@ class Model(object):
         for (oldv, newv) in zip(get_variables("oldpi"), get_variables("model"))]
 
         neglogpac = train_model.pd.neglogp(A)
+
+        # Calculate the entropy
+        # Entropy is used to improve exploration by limiting the premature convergence to suboptimal policy.
         entropy = tf.reduce_mean(train_model.pd.entropy())
 
+        # CALCULATE THE LOSS
+        # Total loss = Policy gradient loss - entropy * entropy coefficient + Value coefficient * value loss
 
+        # Clip the value to reduce variability during Critic training
+        # Get the predicted value
         vpred = train_model.vf
-  
+        # vpredclipped = OLDVPRED + tf.clip_by_value(train_model.vf - OLDVPRED, - CLIPRANGE, CLIPRANGE)
+        # Unclipped value
 
         vf_losses1 = tf.square(vpred - R)
         # Clipped value
