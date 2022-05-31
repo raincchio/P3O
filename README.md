@@ -31,5 +31,5 @@ For example, using P3O for HalfCheetah-v2
 ```bash
 export PYTHONPATH=/home/*user*/workspace/P3O
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/*user*/.mujoco/mujoco210/bin:/usr/lib/nvidia
-python3 -u -m baselines.run --alg=ddpo --num_env=1 --seed=1 --env=HalfCheetah-v2 --num_timesteps=3e6 --kl_coef=0.01 --noptepochs=5 --nminibatches=64 --log_path=./HalfCheetah/p3o_s-1_no-5_minib-64_kl-0.01
+python3 -u -m baselines.run --alg=p3o --num_env=1 --seed=1 --env=HalfCheetah-v2 --num_timesteps=3e6 --kl_coef=0.01 --noptepochs=5 --nminibatches=64 --log_path=./HalfCheetah/p3o_s-1_no-5_minib-64_kl-0.01
 ```
