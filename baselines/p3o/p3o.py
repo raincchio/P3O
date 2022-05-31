@@ -11,7 +11,7 @@ try:
     from mpi4py import MPI
 except ImportError:
     MPI = None
-from baselines.ddpo.runner import Runner
+from baselines.p3o.runner import Runner
 
 
 def constfn(val):
@@ -108,7 +108,7 @@ def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2
 
     # Instantiate the model object (that creates act_model and train_model)
     if model_fn is None:
-        from baselines.ddpo.model import Model
+        from baselines.p3o.model import Model
         model_fn = Model
 
     model = model_fn(policy=policy, ob_space=ob_space, ac_space=ac_space, nbatch_act=nenvs, nbatch_train=nbatch_train,
@@ -156,6 +156,7 @@ def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2
         if update % log_interval == 0 and is_mpi_root: logger.info('Done.')
 
         epinfobuf.extend(epinfos)
+        # print(epinfobuf)
         if eval_env is not None:
             eval_epinfobuf.extend(eval_epinfos)
 

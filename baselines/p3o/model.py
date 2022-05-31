@@ -73,29 +73,34 @@ class Model(object):
         # Clip the value to reduce variability during Critic training
         # Get the predicted value
         vpred = train_model.vf
-        # vpredclipped = OLDVPRED + tf.clip_by_value(train_model.vf - OLDVPRED, - CLIPRANGE, CLIPRANGE)
+
+        vpredclipped = tf.clip_by_value(train_model.vf - OLDVPRED, - CLIPRANGE, CLIPRANGE) + OLDVPRED
         # Unclipped value
 
-        vf_losses1 = tf.square(vpred - R)
+        vf_clip_losses = tf.square(vpredclipped - R)
         # Clipped value
-        # vf_losses2 = tf.square(vpredclipped - R)
+        vf_losses = tf.square(vpred - R)
 
-        # vf_loss = .5 * tf.reduce_mean(tf.maximum(vf_losses1, vf_losses2))
-        vf_loss = .5 * tf.reduce_mean(vf_losses1)
+        vf_loss = .5 * tf.reduce_mean(tf.maximum(vf_losses, vf_clip_losses))
+        # vf_loss = .5 * tf.reduce_mean(vf_losses1)
 
         # Calculate ratio (pi current policy / pi old policy)
         ratio = tf.exp(OLDNEGLOGPAC - neglogpac)
 
         fr_kl_loss = kl_coef*oldpi.pd.kl(train_model.pd)
 
-        pg_losses2 = -ADV*tf.sigmoid(tf.log(ratio))
+        pg_losses2 = -ADV*1*tf.sigmoid(4*ratio - 4)
+
+        # gradient_r_scpi = tf.reduce_mean(-ADV*4*tf.sigmoid(4*ratio - 4)*(1-tf.sigmoid(4*ratio - 4)))
 
         pg_loss = tf.reduce_mean(pg_losses2)
 
         pg_loss += tf.reduce_mean(fr_kl_loss)
+
+        #static
         approxkl = .5 * tf.reduce_mean(tf.square(neglogpac - OLDNEGLOGPAC))
         clipfrac = tf.reduce_mean(tf.to_float(tf.greater(tf.abs(ratio - 1.0), CLIPRANGE)))
-        avg_ratio = tf.reduce_mean(tf.to_float(tf.abs(ratio - 1.0)))
+        rAt = tf.reduce_mean(-ADV * ratio)
         max_ratio = tf.reduce_max(tf.to_float(tf.abs(ratio - 1.0)))
         # Total loss
         loss = pg_loss - entropy * ent_coef + vf_loss * vf_coef
@@ -122,8 +127,8 @@ class Model(object):
         self.grads = grads
         self.var = var
         self._train_op = self.trainer.apply_gradients(grads_and_var)
-        self.loss_names = ['policy_loss', 'value_loss', 'policy_entropy', 'approxkl', 'clipfrac', 'avg_ratio','max_ratio']
-        self.stats_list = [pg_loss, vf_loss, entropy, approxkl, clipfrac, avg_ratio, max_ratio]
+        self.loss_names = ['policy_loss', 'value_loss', 'policy_entropy', 'approxkl', 'clipfrac', 'rAt','max_ratio']
+        self.stats_list = [pg_loss, vf_loss, entropy, approxkl, clipfrac, rAt, max_ratio, ]
 
 
         self.train_model = train_model
@@ -146,7 +151,7 @@ class Model(object):
         advs = returns - values
 
         # Normalize the advantages
-        advs = (advs - advs.mean()) / (advs.std() + 1e-8)
+        # advs = (advs - advs.mean()) / (advs.std() + 1e-8)
 
         td_map = {
             self.train_model.X: obs,
