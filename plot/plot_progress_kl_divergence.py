@@ -12,9 +12,9 @@ rc_fonts = {
     'ytick.labelsize':10,
     "font.family": "times",
     "font.size": 10,
-    'axes.titlesize':10,
-    "legend.fontsize":8,
-    'figure.figsize': (8.5, 4.5),
+    'axes.titlesize':10,# title
+    "legend.fontsize":10,
+    'figure.figsize': (8.5, 5),
     # 'figure.figsize': (7, 7/2.0*0.75),
     # "text.usetex": True,
     # 'text.latex.preview': True,
@@ -68,10 +68,14 @@ def ts2xy(ts, xaxis, yaxis):
     return x, y
 
 def group_by_seed(taskpath):
-    return taskpath.dirname.split(os.sep)[-1].split('_')[0]
+    path = taskpath.dirname.split(os.sep)[-1].split('_')
+    return path[0]
+
 
 def group_by_name(taskpath):
     return taskpath.dirname.split(os.sep)[-2]
+
+
 def default_xy_fn(r):
     try:
         x = np.cumsum(r.monitor.l)
@@ -95,7 +99,6 @@ def plot_results(
         xlabel=None,
         ylabel=None,
         row=1,
-        inches=7
 ):
 
     sk2r = defaultdict(list) # splitkey2results
@@ -218,30 +221,37 @@ def plot_results(
 
     tt_s = g2ls[0]
 
-    ad = {}
-    for key in tt.keys():
-        if key in tt_s.keys():
-            ad[key] = tt_s[key]
+    ad = g2ls[0]
+
 
     axarr[0][0].legend(ad.values(), [tt[g] if g in tt.keys() else g for g in ad],edgecolor='None', facecolor='None')
+
     return f, axarr
-
-
 
 
 
 def paper_image():
 
-    path = [r'C:\Users\chenxing\0323\DDPO\performence',]
-    save_name = 'performence'
+    path = [
+        # r'C:\Users\chenxing\0323\ppop3o',C:\Users\chenxing\0323\only_ppop3o
+            r'C:\Users\chenxing\0323\onlyppop3o',
 
-    results = plot_util.load_results(path, enable_monitor=True, enable_progress=False)
-    plot_results(results, split_fn=group_by_name, group_fn=group_by_seed, average_group=True,
+            ]
+    save_name = 'max_ratio'
+
+    def xy_fn(r):
+        y = smooth(r.progress['loss/max_ratio'], radius=10)
+        x = r.progress['misc/total_timesteps']
+        return x,y
+
+    results = plot_util.load_results(path, enable_monitor=False, enable_progress=True)
+    plot_results(results, xy_fn=xy_fn, split_fn=group_by_name, group_fn=group_by_seed, average_group=True,
                  shaded_std=True,shaded_err=False, xlabel=X_TIMESTEPS,
-                 ylabel=Y_REWARD,row=2)
+                 ylabel=r'$\max(|r - 1|)$',row=2)
 
     fig = plt.gcf()
-    fig.savefig('png'+os.sep+save_name+'.pdf',bbox_inches='tight',dpi=300, backend='pdf')
+    plt.show()
+    # fig.savefig('png'+os.sep+save_name+'.pdf',bbox_inches='tight',dpi=300, backend='pdf')
     # fig.savefig('png/'+save_name+'.pdf',dpi=300, backend='pdf')
 
 if __name__ == '__main__':

@@ -13,7 +13,6 @@ from baselines.common.cmd_util import common_arg_parser, parse_unknown_args, mak
 from baselines.common.tf_util import get_session
 from baselines import logger
 from importlib import import_module
-from termcolor import colored
 
 try:
     from mpi4py import MPI
@@ -74,13 +73,10 @@ def train(args, extra_args):
 
     print('Training {} on {}:{} with arguments \n{}'.format(args.alg, env_type, env_id, alg_kwargs))
 
-    # eval_env = build_env(args)
-
     model = learn(
         env=env,
         seed=seed,
         total_timesteps=total_timesteps,
-        # eval_env=eval_env,
         **alg_kwargs
     )
 
@@ -113,7 +109,6 @@ def build_env(args):
         config.gpu_options.allow_growth = True
         get_session(config=config)
 
-        # print(colored('aaaaaaaaaaaaaaaaaa','red'))
         flatten_dict_observations = alg not in {'her'}
         env = make_vec_env(env_id, env_type, args.num_env or 1, seed, reward_scale=args.reward_scale, flatten_dict_observations=flatten_dict_observations)
 
@@ -225,39 +220,15 @@ def main(args):
         model.save(save_path)
 
     if args.play:
+        with open('/home/dachuang/workspace/extra_test/models/first_log','r') as f:
+            play = eval(f.read())
         replay = []
-        logger.log("Running trained model")
-        obs = env.reset()
 
-        state = model.initial_state if hasattr(model, 'initial_state') else None
-        dones = np.zeros((1,))
-
-        episode_rew = np.zeros(env.num_envs) if isinstance(env, VecEnv) else np.zeros(1)
-        flag = 0
-        res = 0.0
-        while True:
-            if state is not None:
-                actions, _, state, _ = model.step(obs,S=state, M=dones)
-            else:
-                actions, _, _, _ = model.step(obs)
-            replay.append([obs.tolist(),actions.tolist()])
-            obs, rew, done, _ = env.step(actions)
-            episode_rew += rew
-
-            # env.render()
-            done_any = done.any() if isinstance(done, np.ndarray) else done
-            if done_any:
-                for i in np.nonzero(done)[0]:
-                    print('episode_rew={}'.format(episode_rew[i]))
-                    res += episode_rew[i]
-                    episode_rew[i] = 0
-                flag +=1
-            if flag>20:
-                print(res/20.0)
-                break
-        from os.path import expanduser
-        # np.savez('/home/dachuang/workspace/extra_test/models/log_p3o',*replay)
-        with open(expanduser("~")+'/workspace/extra_test/models/first_log','w') as f:
+        for i in range(len(play)):
+            obs = play[i][0]
+            actions, _, _, _ = model.step(np.array(obs))
+            replay.append([obs, actions.tolist()])
+        with open('/home/dachuang/workspace/extra_test/models/second_log','w') as f:
             f.write(str(replay))
     env.close()
 

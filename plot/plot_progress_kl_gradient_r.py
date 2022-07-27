@@ -13,8 +13,9 @@ rc_fonts = {
     "font.family": "times",
     "font.size": 10,
     'axes.titlesize':10,
-    "legend.fontsize":8,
-    'figure.figsize': (8.5, 4.5),
+    "legend.fontsize":10,
+    'figure.figsize': (8.5, 5),
+    'axes.unicode_minus':False,
     # 'figure.figsize': (7, 7/2.0*0.75),
     # "text.usetex": True,
     # 'text.latex.preview': True,
@@ -68,10 +69,14 @@ def ts2xy(ts, xaxis, yaxis):
     return x, y
 
 def group_by_seed(taskpath):
-    return taskpath.dirname.split(os.sep)[-1].split('_')[0]
+    path = taskpath.dirname.split(os.sep)[-1].split('_')
+    return path[0]
+
 
 def group_by_name(taskpath):
     return taskpath.dirname.split(os.sep)[-2]
+
+
 def default_xy_fn(r):
     try:
         x = np.cumsum(r.monitor.l)
@@ -95,7 +100,6 @@ def plot_results(
         xlabel=None,
         ylabel=None,
         row=1,
-        inches=7
 ):
 
     sk2r = defaultdict(list) # splitkey2results
@@ -119,7 +123,6 @@ def plot_results(
     g2cs = []
     # for (isplit, sk) in enumerate(sk2r.keys()):
     for (isplit, sk) in enumerate(['Enduro', 'Breakout', 'BeamRider', 'Ant', 'HalfCheetah', 'Walker2d']):
-        # plt.gca().set_prop_cycle(markercycle)
         g2l = {}
         g2c = defaultdict(int)
         sresults = sk2r[sk]
@@ -128,9 +131,9 @@ def plot_results(
         idx_col = isplit % ncols
         ax = axarr[idx_row][idx_col]
         for result in sresults:
-            group = group_fn(result)
+            group = 'kl'
             g2c[group] += 1
-            x, y = xy_fn(result)
+            x, y = xy_fn(result,name='loss/approxkl')
             if x is None: x = np.arange(len(y))
             x, y = map(np.asarray, (x, y))
             if average_group:
@@ -140,8 +143,23 @@ def plot_results(
                     x, y, counts = symmetric_ema(x, y, x[0], x[-1], resample, decay_steps=smooth_step)
                 l, = ax.plot(x, y, color=COLORS[groups.index(group) % len(COLORS)])
                 g2l[group] = l
+        for result in sresults:
+            group = 'gradient'
+            g2c[group] += 1
+            x, y = xy_fn(result,name='loss/gradient_r_scpi')
+            if x is None: x = np.arange(len(y))
+            x, y = map(np.asarray, (x, y))
+            if average_group:
+                gresults[group].append((x,y))
+            else:
+                if resample:
+                    x, y, counts = symmetric_ema(x, y, x[0], x[-1], resample, decay_steps=smooth_step)
+                l, = ax.plot(x, y, color=COLORS[groups.index(group) % len(COLORS)])
+                g2l[group] = l
+
+
         if average_group:
-            for idx, group in enumerate(sorted(groups)):
+            for idx, group in enumerate(["kl",'gradient']):
                 xys = gresults[group]
                 if not any(xys):
                     continue
@@ -218,27 +236,33 @@ def plot_results(
 
     tt_s = g2ls[0]
 
-    ad = {}
-    for key in tt.keys():
-        if key in tt_s.keys():
-            ad[key] = tt_s[key]
+    ad = g2ls[0]
+
 
     axarr[0][0].legend(ad.values(), [tt[g] if g in tt.keys() else g for g in ad],edgecolor='None', facecolor='None')
+
     return f, axarr
-
-
 
 
 
 def paper_image():
 
-    path = [r'C:\Users\chenxing\0323\DDPO\performence',]
-    save_name = 'performence'
+    path = [
+        # r'C:\Users\chenxing\0323\ppop3o',C:\Users\chenxing\0323\only_ppop3o
+        r'C:\Users\chenxing\0323\onlyp3o',
 
-    results = plot_util.load_results(path, enable_monitor=True, enable_progress=False)
-    plot_results(results, split_fn=group_by_name, group_fn=group_by_seed, average_group=True,
+    ]
+    save_name = 'kl_gradient_r'
+
+    def xy_fn(r, name):
+        y = smooth(r.progress[name], radius=10)
+        x = r.progress['misc/total_timesteps']
+        return x,y
+
+    results = plot_util.load_results(path, enable_monitor=False, enable_progress=True)
+    plot_results(results, xy_fn=xy_fn, split_fn=group_by_name, group_fn=group_by_seed, average_group=True,
                  shaded_std=True,shaded_err=False, xlabel=X_TIMESTEPS,
-                 ylabel=Y_REWARD,row=2)
+                 ylabel='policy kl gradient',row=2)
 
     fig = plt.gcf()
     fig.savefig('png'+os.sep+save_name+'.pdf',bbox_inches='tight',dpi=300, backend='pdf')

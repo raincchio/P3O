@@ -13,8 +13,8 @@ rc_fonts = {
     "font.family": "times",
     "font.size": 10,
     'axes.titlesize':10,
-    "legend.fontsize":8,
-    'figure.figsize': (8.5, 4.5),
+    "legend.fontsize":10,
+    'figure.figsize': (6, 4),
     # 'figure.figsize': (7, 7/2.0*0.75),
     # "text.usetex": True,
     # 'text.latex.preview': True,
@@ -68,7 +68,9 @@ def ts2xy(ts, xaxis, yaxis):
     return x, y
 
 def group_by_seed(taskpath):
-    return taskpath.dirname.split(os.sep)[-1].split('_')[0]
+    gp = taskpath.dirname.split(os.sep)[-1].split('_')
+
+    return gp[0] + gp[-1]
 
 def group_by_name(taskpath):
     return taskpath.dirname.split(os.sep)[-2]
@@ -117,8 +119,8 @@ def plot_results(
     fmts=['-x', '-+', '-.', '-s','-*', '-^', ]
     g2ls = []
     g2cs = []
-    # for (isplit, sk) in enumerate(sk2r.keys()):
-    for (isplit, sk) in enumerate(['Enduro', 'Breakout', 'BeamRider', 'Ant', 'HalfCheetah', 'Walker2d']):
+    for (isplit, sk) in enumerate(sk2r.keys()):
+    # for (isplit, sk) in enumerate(['Enduro', 'Breakout', 'BeamRider', 'Ant', 'HalfCheetah', 'Walker2d']):
         # plt.gca().set_prop_cycle(markercycle)
         g2l = {}
         g2c = defaultdict(int)
@@ -213,8 +215,17 @@ def plot_results(
                 plt.sca(ax)
                 plt.ylabel(ylabel)
         g2ls.append(g2l)
-    tt= {'ddpo':'P3O','vpgdualclip':'Dual-Clip PPO',
-         'acktr':'ACKTR','ppo2':'PPO','trpo':'TRPO','a2c':'A2C'}
+    tt= {
+        "ddpo8-0.5":r"$\alpha=8$ $\beta=0.5$ ",
+        "ddpo2-1":r"$\alpha=2$ $\beta=1$ ",
+        "ddpo4-1":r"$\alpha=4$ $\beta=1$ ",
+        "ddpo1-2":r"$\alpha=1$ $\beta=2$ ",
+        "ddpo2-2":r"$\alpha=2$ $\beta=2$ ",
+        "ddpo0.5-4":r"$\alpha=0.5$ $\beta=4$ ",
+        "ddpo1-4":r"$\alpha=1$ $\beta=4$ ",
+        "ddpo2-4":r"$\alpha=2$ $\beta=4$ ",
+        "ddpo0.5-8":r"$\alpha=0.5$ $\beta=8$ ",
+    }
 
     tt_s = g2ls[0]
 
@@ -223,7 +234,10 @@ def plot_results(
         if key in tt_s.keys():
             ad[key] = tt_s[key]
 
-    axarr[0][0].legend(ad.values(), [tt[g] if g in tt.keys() else g for g in ad],edgecolor='None', facecolor='None')
+    axarr[0][0].legend(ad.values(), [tt[g] if g in tt.keys() else g for g in ad],edgecolor='None', facecolor='None',loc=(1.05, 0.25))
+    # legend.get_frame().set_alpha(None)
+    # legend.get_frame().set_facecolor((0, 0, 0, 0))
+    # legend.get_frame().set_edgecolor((0, 0, 0, 0))
     return f, axarr
 
 
@@ -232,13 +246,14 @@ def plot_results(
 
 def paper_image():
 
-    path = [r'C:\Users\chenxing\0323\DDPO\performence',]
-    save_name = 'performence'
+    path = [r'C:\Users\chenxing\0323\HalfCheetah_mulit_parameter_lr-1e4',
+            ]
+    save_name = 'halfcheetah-para-sel'
 
     results = plot_util.load_results(path, enable_monitor=True, enable_progress=False)
     plot_results(results, split_fn=group_by_name, group_fn=group_by_seed, average_group=True,
                  shaded_std=True,shaded_err=False, xlabel=X_TIMESTEPS,
-                 ylabel=Y_REWARD,row=2)
+                 ylabel=Y_REWARD,row=1)
 
     fig = plt.gcf()
     fig.savefig('png'+os.sep+save_name+'.pdf',bbox_inches='tight',dpi=300, backend='pdf')

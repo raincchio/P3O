@@ -1,26 +1,21 @@
-import numpy as np
-from collections import defaultdict
-from baselines.common.plot_util import smooth,symmetric_ema
-import matplotlib.pyplot as plt
-from baselines.common import plot_util
-import math
 import matplotlib
-import matplotlib.font_manager
-plt.style.use('seaborn')
+import matplotlib.pyplot as plt
+import numpy as np
+from collections import defaultdict, namedtuple
+from baselines.common.plot_util import smooth,symmetric_ema
+import os
+
 rc_fonts = {
-#8.5
-    'lines.markeredgewidth': 1,
-    "lines.markersize":3,
-    "lines.linewidth":1,
     'xtick.direction': 'in',
     'ytick.direction': 'in',
-    'xtick.labelsize':8,
-    'ytick.labelsize':8,
-    "font.family": "serif",
-    # "font.size": 11,
-    'axes.titlesize':11,
-    "legend.fontsize":8,
-    'figure.figsize': (8.5, 4),
+    'xtick.labelsize':10,
+    'ytick.labelsize':10,
+    "font.family": "times",
+    "font.size": 10,
+    'axes.titlesize':10,
+    "legend.fontsize":10,
+    'figure.figsize': (5, 3),# 3.5, 5, 7.2
+    # 'figure.figsize': (7, 7/2.0*0.75),
     # "text.usetex": True,
     # 'text.latex.preview': True,
     # 'text.latex.preamble':
@@ -31,8 +26,9 @@ rc_fonts = {
     #     """,
 }
 matplotlib.rcParams.update(rc_fonts)
-fmts=['-^', '-v', '-.', '-s', '-*']
-# fmts=['-+', '-.', '-s','-*', '-^']
+# plt.style.use('seaborn')
+from baselines.common import plot_util
+
 X_TIMESTEPS = 'timesteps'
 X_EPISODES = 'episodes'
 X_WALLTIME = 'walltime_hrs'
@@ -40,11 +36,9 @@ Y_REWARD = 'reward'
 Y_TIMESTEPS = 'timesteps'
 POSSIBLE_X_AXES = [X_TIMESTEPS, X_EPISODES, X_WALLTIME]
 EPISODES_WINDOW = 100
-COLORS = ['blue', 'green', 'magenta', 'yellow', 'black', 'purple', 'pink',
-          'brown', 'orange', 'teal', 'coral', 'lightblue', 'lime', 'lavender', 'turquoise',
-          'darkgreen', 'tan', 'salmon', 'gold', 'darkred', 'darkblue']
-
-COLORS= ['#4c72b0','#55a868','#c44e52','#8172b2','#ccb974']
+COLORS = ['blue', 'green', 'cyan', 'magenta', 'purple',
+          'orange', 'teal', 'turquoise',
+          'darkgreen', 'tan', 'salmon', 'gold',  'darkred', 'darkblue']
 
 def rolling_window(a, window):
     shape = a.shape[:-1] + (a.shape[-1] - window + 1, window)
@@ -73,43 +67,21 @@ def ts2xy(ts, xaxis, yaxis):
         raise NotImplementedError
     return x, y
 
-def plot_curves(xy_list, xaxis, yaxis, title):
-    fig = plt.figure(figsize=(8,2))
-    maxx = max(xy[0][-1] for xy in xy_list)
-    minx = 0
-    for (i, (x, y)) in enumerate(xy_list):
-        color = COLORS[i % len(COLORS)]
-        plt.scatter(x, y, s=2)
-        x, y_mean = window_func(x, y, EPISODES_WINDOW, np.mean) #So returns average of last EPISODE_WINDOW episodes
-        plt.plot(x, y_mean, color=color)
-    plt.xlim(minx, maxx)
-    plt.title(title)
-    plt.xlabel(xaxis)
-    plt.ylabel(yaxis)
-    plt.tight_layout()
-    fig.canvas.mpl_connect('resize_event', lambda event: plt.tight_layout())
-    plt.grid(True)
-
-
 def group_by_seed(taskpath):
-    return taskpath.dirname.split('/')[-1].split('_')[0]
+    path = taskpath.dirname.split(os.sep)[-1].split('_')
+    return "_".join(path[2:])
+
 
 def group_by_name(taskpath):
-    return taskpath.dirname.split('/')[-2]
+    return taskpath.dirname.split(os.sep)[-2]
 def default_xy_fn(r):
-
-    # r.progress['misc/total_timesteps'].values[-1]
-
     try:
-        y = np.nan_to_num(r.progress['eprewmean'],0)
-        y = smooth(y, radius=10)
-        x = r.progress['misc/total_timesteps']
-
-    except:
         x = np.cumsum(r.monitor.l)
         y = smooth(r.monitor.r, radius=10)
+    except:
+        y = smooth(r.progress['return-average'], radius=10)
+        x = r.progress['total-samples']
     return x,y
-
 def plot_results(
         allresults, *,
         xy_fn=default_xy_fn,
@@ -125,38 +97,29 @@ def plot_results(
         xlabel=None,
         ylabel=None,
         row=1,
-        col=1
+        inches=7
 ):
 
-
-    if split_fn is None: split_fn = lambda _ : ''
-    if group_fn is None: group_fn = lambda _ : ''
     sk2r = defaultdict(list) # splitkey2results
     for result in allresults:
         splitkey = split_fn(result)
         sk2r[splitkey].append(result)
-    assert len(sk2r) > 0
-    assert isinstance(resample, int), "0: don't resample. <integer>: that many samples"
-
+    ll = len(sk2r)
     nrows=row
-    ncols=col
-
-
+    ncols=ll//nrows
 
     f, axarr = plt.subplots(nrows, ncols, sharex=False, squeeze=False)
-    # f.set_size_inches(inches, inches*0.75/ncols)
+
 
     groups = list(set(group_fn(result) for result in allresults))
 
     default_samples = 512
     if average_group:
         resample = resample or default_samples
-
+    fmts=['-x', '-+', '-.', '-s','-*', '-^', ]
     g2ls = []
     g2cs = []
     for (isplit, sk) in enumerate(sk2r.keys()):
-    # for (isplit, sk) in enumerate(['Enduro', 'Breakout', 'BeamRider', 'Ant', 'HalfCheetah', 'Walker2d']):
-    # for (isplit, sk) in enumerate(['Breakout', 'Ant']):
         g2l = {}
         g2c = defaultdict(int)
         sresults = sk2r[sk]
@@ -178,14 +141,7 @@ def plot_results(
                 l, = ax.plot(x, y, color=COLORS[groups.index(group) % len(COLORS)])
                 g2l[group] = l
         if average_group:
-            # print(sorted(groups))
-            sort_groups_ = sorted(groups)
-            if "ddpo" in sort_groups_:
-                id = sort_groups_.index('ddpo')
-                sort_groups_.pop(id)
-                sort_groups_.append('ddpo')
-
-            for idx, group in enumerate(sort_groups_):
+            for idx, group in enumerate(sorted(groups)):
                 xys = gresults[group]
                 if not any(xys):
                     continue
@@ -195,16 +151,20 @@ def plot_results(
                 else:
                     color = COLORS[idx % len(COLORS)]
                     fmt = fmts[idx % len(fmts)]
-                # print(group, color, fmt)
+                # print(groups.index(group), idx)
                 origxs = [xy[0] for xy in xys]
                 minxlen = min(map(len, origxs))
                 def allequal(qs):
                     return all((q==qs[0]).all() for q in qs[1:])
                 if resample:
-                    # print(isplit, sk)
+                    print(isplit, sk)
                     low = max(x[0] for x in origxs)
+                    # if sk in ['Enduro', 'Breakout', 'BeamRider']:
+                    #     high = 9e6
+                    #
+                    # else:
+                    #     high = min(x[-1] for x in origxs)
                     high = min(x[-1] for x in origxs)
-                    print(high)
                     usex = np.linspace(low, high, resample)
                     ys = []
                     for (x, y) in xys:
@@ -219,11 +179,9 @@ def plot_results(
                 ystderr = ystd / np.sqrt(len(ys))
                 # TODO
                 need_point=5
-                axarr[idx_row][idx_col].locator_params(axis='x', nbins=10)
-                axarr[idx_row][idx_col].locator_params(axis='y', nbins=8)
-                internal = default_samples//need_point +idx*10
-                l, = axarr[idx_row][idx_col].plot(usex, ymean, fmt, color=color,markevery=internal)
 
+                l, = axarr[idx_row][idx_col].plot(usex, ymean, fmt, color=color,markevery=default_samples//need_point)
+                # set_size(4, 3,axarr[idx_row][idx_col])
                 g2l[group] = l
                 if shaded_err:
                     if shaded_line:
@@ -232,6 +190,7 @@ def plot_results(
                         ax.fill_between(usex, ymean - ystderr, ymean + ystderr, color=color, alpha=.4)
                 if shaded_std:
                     if shaded_line:
+
                         x = usex[::default_samples//need_point]
                         ymin = ymean - ystd
                         ymax = ymean + ystd
@@ -239,57 +198,53 @@ def plot_results(
                     else:
                         ax.fill_between(usex, ymean - ystd,    ymean + ystd,    color=color, alpha=.2)
 
-        # https://matplotlib.org/users/legend_guide.html
         plt.tight_layout()
 
-        # ax.set_title('('+chr(isplit+97)+') '+sk, y=-0.4)
+
         ax.set_title('('+chr(isplit+97)+') '+sk)
-        # ax.set_title(sk)
-        # add xlabels, but only to the bottom row
+
         if xlabel is not None:
             for ax in axarr.flatten():
                 plt.sca(ax)
+                # plt.xlabel('('+chr(id+97)+') '+xlabel)
                 plt.xlabel('timesteps')
-        # add ylabels, but only to left column
         if ylabel is not None:
             for ax in axarr[:,0]:
                 plt.sca(ax)
                 plt.ylabel(ylabel)
         g2ls.append(g2l)
     tt= {'ddpo':'P3O','vpgdualclip':'Dual-Clip PPO',
-         'acktr':'ACKTR','ppo2':'PPO','trpo':'TRPO','a2c':'A2C',
-         'vpgsigmoid':'P3O-K','vpg':'P3O-KS','vpgkl':'P3O-S',
-         "ddpodeepNN":'P3O+deeper network'}
+         'acktr':'ACKTR','ppo2':'PPO','trpo':'TRPO','a2c':'A2C'}
 
     tt_s = g2ls[0]
 
-    ad = {}
-    for key in tt.keys():
-        if key in tt_s.keys():
-            ad[key] = tt_s[key]
+    ad = tt_s
 
-    legend= axarr[0][0].legend(ad.values(), [tt[g] if g in tt.keys() else g for g in ad],borderaxespad=0)
-    legend.get_frame().set_alpha(None)
-    legend.get_frame().set_facecolor((0, 0, 0, 0))
-    legend.get_frame().set_edgecolor((0, 0, 0, 0))
+    # for key in tt.keys():
+    #     if key in tt_s.keys():
+    #         ad[key] = tt_s[key]
+
+    axarr[0][0].legend(ad.values(), [tt[g] if g in tt.keys() else g for g in ad],edgecolor='None', facecolor='None',loc=(1.05, 0.25))
+
     return f, axarr
 
-if __name__ == '__main__':
-    path = [
-        # '/home/chenxing/extra_test',
-        #     '/home/chenxing/DDPO/extra_test_8opt',
-        # '/home/chenxing/DDPO/extra_test_ablation',
-        # '/home/chenxing/DDPO/image/performence'
-        #    "/home/chenxing/ubt/DDPO/extra_test_depth_network",
-        "/home/chenxing/DDPO/ewai_trpo_acktr_duaclip/extra_test"
+
+def paper_image():
+
+    path = [r'C:\Users\chenxing\0323\HalfCheetah_batchsize',
             ]
+    save_name = 'halfcheetah_batchsize'
 
-    results = plot_util.load_results(path, enable_monitor=True, enable_progress=True)
+    results = plot_util.load_results(path, enable_monitor=True, enable_progress=False)
     plot_results(results, split_fn=group_by_name, group_fn=group_by_seed, average_group=True,
-                           shaded_std=True,shaded_err=False, xlabel=X_TIMESTEPS,
-                           ylabel=Y_REWARD,row=1, col=3)
-    # plt.show()
-    fig = plt.gcf()
-    save_name = 'extra_test_depth_network2'
-    fig.savefig('../png/'+save_name+'.pdf',bbox_inches='tight',dpi=300, backend='pdf')
+                 shaded_std=True,shaded_err=False, xlabel=X_TIMESTEPS,
+                 ylabel=Y_REWARD,row=1)
 
+    fig = plt.gcf()
+    fig.savefig('png'+os.sep+save_name+'.pdf',bbox_inches='tight',dpi=300, backend='pdf')
+    # fig.savefig('png/'+save_name+'.pdf',dpi=300, backend='pdf')
+
+
+if __name__ == '__main__':
+
+    paper_image()

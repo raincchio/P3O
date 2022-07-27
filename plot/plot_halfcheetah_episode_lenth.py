@@ -13,8 +13,8 @@ rc_fonts = {
     "font.family": "times",
     "font.size": 10,
     'axes.titlesize':10,
-    "legend.fontsize":8,
-    'figure.figsize': (8.5, 4.5),
+    "legend.fontsize":10,
+    'figure.figsize': (5, 3),# 3.5, 5, 7.2
     # 'figure.figsize': (7, 7/2.0*0.75),
     # "text.usetex": True,
     # 'text.latex.preview': True,
@@ -68,7 +68,9 @@ def ts2xy(ts, xaxis, yaxis):
     return x, y
 
 def group_by_seed(taskpath):
-    return taskpath.dirname.split(os.sep)[-1].split('_')[0]
+    path = taskpath.dirname.split(os.sep)[-1].split('_')
+    return "_".join(path[2:])
+
 
 def group_by_name(taskpath):
     return taskpath.dirname.split(os.sep)[-2]
@@ -117,9 +119,7 @@ def plot_results(
     fmts=['-x', '-+', '-.', '-s','-*', '-^', ]
     g2ls = []
     g2cs = []
-    # for (isplit, sk) in enumerate(sk2r.keys()):
-    for (isplit, sk) in enumerate(['Enduro', 'Breakout', 'BeamRider', 'Ant', 'HalfCheetah', 'Walker2d']):
-        # plt.gca().set_prop_cycle(markercycle)
+    for (isplit, sk) in enumerate(sk2r.keys()):
         g2l = {}
         g2c = defaultdict(int)
         sresults = sk2r[sk]
@@ -218,12 +218,14 @@ def plot_results(
 
     tt_s = g2ls[0]
 
-    ad = {}
-    for key in tt.keys():
-        if key in tt_s.keys():
-            ad[key] = tt_s[key]
+    ad = tt_s
 
-    axarr[0][0].legend(ad.values(), [tt[g] if g in tt.keys() else g for g in ad],edgecolor='None', facecolor='None')
+    # for key in tt.keys():
+    #     if key in tt_s.keys():
+    #         ad[key] = tt_s[key]
+
+    axarr[0][0].legend(ad.values(), [tt[g] if g in tt.keys() else g for g in ad],edgecolor='None', facecolor='None',loc=(1.05, 0.25))
+
     return f, axarr
 
 
@@ -232,13 +234,14 @@ def plot_results(
 
 def paper_image():
 
-    path = [r'C:\Users\chenxing\0323\DDPO\performence',]
-    save_name = 'performence'
+    path = [r'C:\Users\chenxing\0323\HalfCheetah_episode_length',
+            ]
+    save_name = 'HalfCheetah_episode_length'
 
     results = plot_util.load_results(path, enable_monitor=True, enable_progress=False)
     plot_results(results, split_fn=group_by_name, group_fn=group_by_seed, average_group=True,
                  shaded_std=True,shaded_err=False, xlabel=X_TIMESTEPS,
-                 ylabel=Y_REWARD,row=2)
+                 ylabel=Y_REWARD,row=1)
 
     fig = plt.gcf()
     fig.savefig('png'+os.sep+save_name+'.pdf',bbox_inches='tight',dpi=300, backend='pdf')

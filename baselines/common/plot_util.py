@@ -243,6 +243,7 @@ def default_xy_fn(r):
         x = np.cumsum(r.monitor.l)
         y = smooth(r.monitor.r, radius=10)
     except:
+
         y = smooth(r.progress['return-average'], radius=10)
         x = r.progress['total-samples']
     return x,y

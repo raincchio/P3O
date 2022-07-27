@@ -68,10 +68,14 @@ def ts2xy(ts, xaxis, yaxis):
     return x, y
 
 def group_by_seed(taskpath):
-    return taskpath.dirname.split(os.sep)[-1].split('_')[0]
+    path = taskpath.dirname.split(os.sep)[-1].split('_')
+    return path[0]+'_'.join(path[2:])
+
 
 def group_by_name(taskpath):
     return taskpath.dirname.split(os.sep)[-2]
+
+
 def default_xy_fn(r):
     try:
         x = np.cumsum(r.monitor.l)
@@ -218,26 +222,20 @@ def plot_results(
 
     tt_s = g2ls[0]
 
-    ad = {}
-    for key in tt.keys():
-        if key in tt_s.keys():
-            ad[key] = tt_s[key]
+    ad = g2ls[0]
+
 
     axarr[0][0].legend(ad.values(), [tt[g] if g in tt.keys() else g for g in ad],edgecolor='None', facecolor='None')
-    # legend.get_frame().set_alpha(None)
-    # legend.get_frame().set_facecolor((0, 0, 0, 0))
-    # legend.get_frame().set_edgecolor((0, 0, 0, 0))
+
     return f, axarr
-
-
 
 
 
 def paper_image():
 
-    path = [r'C:\Users\chenxing\0323\performance',
+    path = [r'C:\Users\chenxing\0323\HalfCheetah_result',
             ]
-    save_name = 'halfcheetah'
+    save_name = 'halfcheetah_p3o_vs_ppo'
 
     results = plot_util.load_results(path, enable_monitor=True, enable_progress=False)
     plot_results(results, split_fn=group_by_name, group_fn=group_by_seed, average_group=True,
