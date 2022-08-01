@@ -1,5 +1,7 @@
 # Preconditioner Proximal Policy Optimization
 
+Our code is based on the OpenAI's baseline.[https://github.com/openai/baselines]
+
 ```bash
 sudo apt-get install libglew-dev patchelf
 ```
