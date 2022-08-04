@@ -2,6 +2,8 @@
 
 Our code is based on the OpenAI's baseline.[https://github.com/openai/baselines]
 
+# First, install some dependencies.
+
 ```bash
 sudo apt-get install libglew-dev patchelf
 ```
@@ -38,17 +40,19 @@ python3 -u -m baselines.run --alg=p3o --num_env=1 --seed=1 --env=HalfCheetah-v2 
 ```
 
 # save model
+Save the learned model after finishing the train, and you can modify the code in the baselines/run.py to save the model at an interval.
+such as moving it to the baselines/p3o/p3o.py
 ```bash
-# Save the learned model after finishing the train, and you can modify the code in the baselines/run.py to save the model at an interval.
-# such as moving it to the baselines/p3o/p3o.py
 python3 -u -m baselines.run --alg=p3o --num_env=1 --seed=1 --env=HalfCheetah-v2 --num_timesteps=3e6 \
 --kl_coef=0.01 --noptepochs=5 --nminibatches=64 \
 --save_path=./HalfCheetah/p3o_s-1_no-5_minib-64_kl-0.01_model
 ```
 # test model
+
+The learn function will load the model according to the load_path argument and set num_timesteps=0 to skip the training process.
+Also, modify the code for easy use, and move the load function in the baselines/p3o/p3o.py to baselines/run.py.
 ```bash
-# The learn function will load the model according to the load_path argument and set num_timesteps=0 to skip the training process.
-# Also, modify the code for easy use, and move the load function in the baselines/p3o/p3o.py to baselines/run.py.
+
 python3 -u -m baselines.run --alg=p3o --num_env=1 --seed=1 --env=HalfCheetah-v2 --num_timesteps=0 \
 --load_path=./HalfCheetah/p3o_s-1_no-5_minib-64_kl-0.01_model --play
 ```
