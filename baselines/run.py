@@ -225,40 +225,42 @@ def main(args):
         model.save(save_path)
 
     if args.play:
-        replay = []
+        # replay = []
         logger.log("Running trained model")
         obs = env.reset()
 
         state = model.initial_state if hasattr(model, 'initial_state') else None
         dones = np.zeros((1,))
 
-        episode_rew = np.zeros(env.num_envs) if isinstance(env, VecEnv) else np.zeros(1)
-        flag = 0
-        res = 0.0
-        while True:
+        # episode_rew = np.zeros(env.num_envs) if isinstance(env, VecEnv) else np.zeros(1)
+        episode_num = 0
+        episode_rewards = []
+        test_run = 2
+        while test_run>0:
             if state is not None:
                 actions, _, state, _ = model.step(obs,S=state, M=dones)
             else:
                 actions, _, _, _ = model.step(obs)
-            replay.append([obs.tolist(),actions.tolist()])
-            obs, rew, done, _ = env.step(actions)
-            episode_rew += rew
+            # replay.append([obs.tolist(),actions.tolist()])
+            obs, rew, done, info = env.step(actions)
+            # this rew is modified by RunningMeanStd in the vec_normalize.py , use info.get('episode')['r'] to get episode reward
 
             # env.render()
             done_any = done.any() if isinstance(done, np.ndarray) else done
             if done_any:
                 for i in np.nonzero(done)[0]:
-                    print('episode_rew={}'.format(episode_rew[i]))
-                    res += episode_rew[i]
-                    episode_rew[i] = 0
-                flag +=1
-            if flag>20:
-                print(res/20.0)
-                break
-        from os.path import expanduser
+                    episode_reward = info[i].get('episode')['r']
+                    # print('episode_rew={}'.format(episode_reward))
+                    episode_rewards.append(episode_reward)
+
+                test_run -= 1
+
+        print("episode rewards",episode_rewards)
+        print("average rewards",sum(episode_rewards) / len(episode_rewards))
+        # from os.path import expanduser
         # np.savez('/home/dachuang/workspace/extra_test/models/log_p3o',*replay)
-        with open(expanduser("~")+'/workspace/extra_test/models/first_log','w') as f:
-            f.write(str(replay))
+        # with open(expanduser("~")+'/workspace/extra_test/models/first_log','w') as f:
+        #     f.write(str(replay))
     env.close()
 
     return model

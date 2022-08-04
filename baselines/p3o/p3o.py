@@ -160,13 +160,8 @@ def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2
         if eval_env is not None:
             eval_epinfobuf.extend(eval_epinfos)
 
-        # Here what we're going to do is for each minibatch calculate the loss and append it.
         mblossvals = []
-        # if len(back_trail)<20:
-        #     back_trail.append((obs, returns, masks, actions, values, neglogpacs))
-        # else:
-        #     lendx = (update-1)%20
-        #     back_trail[lendx] = (obs, returns, masks, actions, values, neglogpacs)
+
         if states is None: # nonrecurrent version
             # Index of each element of batch_size
             # Create the indices array
@@ -184,21 +179,6 @@ def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2
                     res = model.train(lrnow, cliprangenow, betanow, *slices)
                     # print(res[4].item())
                     mblossvals.append(res)
-            if off_update:
-                num = min(1, len(back_trail))
-                uu = random.sample(back_trail, num)
-                for u in uu:
-                    inds = np.arange(nbatch)
-                    for _ in range(noptepochs):
-                        np.random.shuffle(inds)
-                        for start in range(0, nbatch, nbatch_train):
-                            end = start + nbatch_train
-                            mbinds = inds[start:end]
-                            slices = (arr[mbinds] for arr in u)
-                            model.train(lrnow, cliprangenow, betanow, *slices)
-
-
-
 
         else: # recurrent version
             assert nenvs % nminibatches == 0
