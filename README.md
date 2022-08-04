@@ -46,6 +46,7 @@ python3 -u -m baselines.run --alg=p3o --num_env=1 --seed=1 --env=HalfCheetah-v2 
 ```bash
 # The learn function will load the model according to the load_path argument and set num_timesteps=0 to skip the training process.
 # Also, modify the code for easy use, and move the load function in the baselines/p3o/p3o.py to baselines/run.py.
-python3 -u -m baselines.run --alg=p3o --num_env=1 --seed=1 --env=HalfCheetah-v2 --num_timesteps=0 --kl_coef=0.01 --load_path=./HalfCheetah/p3o_s-1_no-5_minib-64_kl-0.01_model
+python3 -u -m baselines.run --alg=p3o --num_env=1 --seed=1 --env=HalfCheetah-v2 --num_timesteps=0 \
+--load_path=./HalfCheetah/p3o_s-1_no-5_minib-64_kl-0.01_model --play
 ```
 
