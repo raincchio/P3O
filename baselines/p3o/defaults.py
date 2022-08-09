@@ -1,4 +1,4 @@
-def mujoco_old():
+def mujoco():
     return dict(
         nsteps=2048,
         nminibatches=32,
@@ -12,7 +12,7 @@ def mujoco_old():
         cliprange=0.2,
         value_network='copy'
     )
-def mujoco():
+def mujoco_bak():
     return dict(
         nsteps=2048,
         nminibatches=32,
