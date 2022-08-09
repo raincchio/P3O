@@ -360,6 +360,8 @@ def load_variables(load_path, variables=None, sess=None):
     variables = variables or tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)
 
     loaded_params = joblib.load(os.path.expanduser(load_path))
+    print(os.path.abspath(load_path))
+
     restores = []
     if isinstance(loaded_params, list):
         assert len(loaded_params) == len(variables), 'number of variables loaded mismatches len(variables)'

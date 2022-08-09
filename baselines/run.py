@@ -113,7 +113,6 @@ def build_env(args):
         config.gpu_options.allow_growth = True
         get_session(config=config)
 
-        # print(colored('aaaaaaaaaaaaaaaaaa','red'))
         flatten_dict_observations = alg not in {'her'}
         env = make_vec_env(env_id, env_type, args.num_env or 1, seed, reward_scale=args.reward_scale, flatten_dict_observations=flatten_dict_observations)
 
@@ -234,8 +233,9 @@ def main(args):
 
         # episode_rew = np.zeros(env.num_envs) if isinstance(env, VecEnv) else np.zeros(1)
         episode_num = 0
+        re = []
         episode_rewards = []
-        test_run = 2
+        test_run = 10
         while test_run>0:
             if state is not None:
                 actions, _, state, _ = model.step(obs,S=state, M=dones)
@@ -244,8 +244,8 @@ def main(args):
             # replay.append([obs.tolist(),actions.tolist()])
             obs, rew, done, info = env.step(actions)
             # this rew is modified by RunningMeanStd in the vec_normalize.py , use info.get('episode')['r'] to get episode reward
-
             # env.render()
+            re.append(rew)
             done_any = done.any() if isinstance(done, np.ndarray) else done
             if done_any:
                 for i in np.nonzero(done)[0]:
@@ -254,7 +254,7 @@ def main(args):
                     episode_rewards.append(episode_reward)
 
                 test_run -= 1
-
+        print(sum(re), len(re))
         print("episode rewards",episode_rewards)
         print("average rewards",sum(episode_rewards) / len(episode_rewards))
         # from os.path import expanduser

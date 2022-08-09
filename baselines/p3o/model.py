@@ -98,10 +98,17 @@ class Model(object):
         pg_loss += tf.reduce_mean(fr_kl_loss)
 
         #static
+
+
         approxkl = .5 * tf.reduce_mean(tf.square(neglogpac - OLDNEGLOGPAC))
         clipfrac = tf.reduce_mean(tf.to_float(tf.greater(tf.abs(ratio - 1.0), CLIPRANGE)))
         rAt = tf.reduce_mean(-ADV * ratio)
-        max_ratio = tf.reduce_max(tf.to_float(tf.abs(ratio - 1.0)))
+        # tf.abs(ratio - 1.0) DEON metric
+        ptadv = (tf.math.sign(ADV) + 1) / 2
+        ntadv = (-1 * tf.math.sign(ADV) + 1) / 2
+        mean_ratio = tf.reduce_mean(tf.to_float(tf.abs(ratio - 1.0)))
+        pt_max_ratio = tf.reduce_max(tf.to_float(tf.abs(ratio - 1.0))*ptadv)
+        nt_max_ratio = tf.reduce_max(tf.to_float(tf.abs(ratio - 1.0))*ntadv)
         # Total loss
         loss = pg_loss - entropy * ent_coef + vf_loss * vf_coef
 
@@ -127,8 +134,8 @@ class Model(object):
         self.grads = grads
         self.var = var
         self._train_op = self.trainer.apply_gradients(grads_and_var)
-        self.loss_names = ['policy_loss', 'value_loss', 'policy_entropy', 'approxkl', 'clipfrac', 'rAt','max_ratio']
-        self.stats_list = [pg_loss, vf_loss, entropy, approxkl, clipfrac, rAt, max_ratio, ]
+        self.loss_names = ['policy_loss', 'value_loss', 'policy_entropy', 'approxkl', 'clipfrac', 'rAt',"mean_ratio", 'pt_max_ratio', 'nt_max_ratio']
+        self.stats_list = [pg_loss, vf_loss, entropy, approxkl, clipfrac, rAt, mean_ratio, pt_max_ratio, nt_max_ratio]
 
 
         self.train_model = train_model

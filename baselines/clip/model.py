@@ -31,7 +31,7 @@ class Model(object):
         if MPI is not None and comm is None:
             comm = MPI.COMM_WORLD
 
-        with tf.variable_scope('ppo2_model', reuse=tf.AUTO_REUSE):
+        with tf.variable_scope('clip_model', reuse=tf.AUTO_REUSE):
             # CREATE OUR TWO MODELS
             # act_model that is used for sampling
             act_model = policy(nbatch_act, 1, sess)
@@ -87,7 +87,6 @@ class Model(object):
         # pg_loss = tf.reduce_mean(pg_losses2)
         approxkl = .5 * tf.reduce_mean(tf.square(neglogpac - OLDNEGLOGPAC))
         clipfrac = tf.reduce_mean(tf.to_float(tf.greater(tf.abs(ratio - 1.0), CLIPRANGE)))
-
         # DEON metric
         ptadv = (tf.math.sign(ADV) + 1) / 2
         ntadv = (-1 * tf.math.sign(ADV) + 1) / 2
@@ -100,7 +99,7 @@ class Model(object):
 
         # UPDATE THE PARAMETERS USING LOSS
         # 1. Get the model parameters
-        params = tf.trainable_variables('ppo2_model')
+        params = tf.trainable_variables('clip_model')
         # 2. Build our trainer
         if comm is not None and comm.Get_size() > 1:
             self.trainer = MpiAdamOptimizer(comm, learning_rate=LR, mpi_rank_weight=mpi_rank_weight, epsilon=1e-5)
@@ -120,7 +119,7 @@ class Model(object):
         self.grads = grads
         self.var = var
         self._train_op = self.trainer.apply_gradients(grads_and_var)
-        self.loss_names = ['policy_loss', 'value_loss', 'policy_entropy', 'approxkl', 'clipfrac', 'mean_ratio','pt_max_ratio','nt_max_ratio']
+        self.loss_names = ['policy_loss', 'value_loss', 'policy_entropy', 'approxkl', 'clipfrac', 'mean_ratio','pt_max_ratio',"nt_max_ratio"]
         self.stats_list = [pg_loss, vf_loss, entropy, approxkl, clipfrac, mean_ratio, pt_max_ratio, nt_max_ratio]
 
 
