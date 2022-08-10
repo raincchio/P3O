@@ -8,7 +8,7 @@ def mujoco():
         log_interval=1,
         ent_coef=0.0,
         kl_coef=0.01,
-        lr=lambda f: 1e-4 * 1,
+        lr=lambda f: 1e-4 * 1.0,
         cliprange=0.2,
         value_network='copy'
     )
