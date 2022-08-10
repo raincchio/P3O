@@ -104,8 +104,8 @@ class Model(object):
         clipfrac = tf.reduce_mean(tf.to_float(tf.greater(tf.abs(ratio - 1.0), CLIPRANGE)))
         rAt = tf.reduce_mean(-ADV * ratio)
         # tf.abs(ratio - 1.0) DEON metric
-        ptadv = (tf.math.sign(ADV) + 1) / 2
-        ntadv = (-1 * tf.math.sign(ADV) + 1) / 2
+        ptadv = (tf.math.sign(ratio - 1.0) + 1) / 2
+        ntadv = (-1 * tf.math.sign(ratio - 1.0) + 1) / 2
         mean_ratio = tf.reduce_mean(tf.to_float(tf.abs(ratio - 1.0)))
         pt_max_ratio = tf.reduce_max(tf.to_float(tf.abs(ratio - 1.0))*ptadv)
         nt_max_ratio = tf.reduce_max(tf.to_float(tf.abs(ratio - 1.0))*ntadv)
