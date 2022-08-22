@@ -90,11 +90,13 @@ class Model(object):
         rAt = tf.reduce_mean(-ADV * ratio)
         # DEON metric
 
-        ntr = (-1 * tf.math.sign(ratio - 1.0) + 1) / 2
-        nta = (-1 * tf.math.sign(ADV) + 1) / 2
-        ntr_rt = tf.reduce_max(tf.to_float(tf.abs(ratio - 1.0))*ntr)
-        nta_rt = tf.reduce_max(tf.to_float(tf.abs(ratio - 1.0))*nta)
-        mean_rt = tf.reduce_mean(tf.to_float(tf.abs(ratio - 1.0)))
+        ptadv = (tf.math.sign(ADV) + 1) / 2
+        nta = (-1 * tf.math.sign(ratio -1) + 1) / 2
+        ntadv = (-1*tf.math.sign(ADV) + 1) / 2
+        pta = (tf.math.sign(ratio -1) + 1) / 2
+
+        unnormal_pt = tf.reduce_mean(tf.to_float(tf.greater(tf.abs(ratio - 1.0), 0)) * ptadv*nta)
+        unnormal_nt = tf.reduce_mean(tf.to_float(tf.greater(tf.abs(ratio - 1.0), 0)) * ntadv*pta)
 
         # Total loss
         loss = pg_loss - entropy * ent_coef + vf_loss * vf_coef
@@ -121,8 +123,8 @@ class Model(object):
         self.grads = grads
         self.var = var
         self._train_op = self.trainer.apply_gradients(grads_and_var)
-        self.loss_names = ['policy_loss', 'value_loss', 'policy_entropy', 'approxkl', 'clipfrac', 'rAt',"ntr_rt", 'nta_rt', 'mean_rt']
-        self.stats_list = [pg_loss, vf_loss, entropy, approxkl, clipfrac, rAt, ntr_rt, nta_rt,mean_rt]
+        self.loss_names = ['policy_loss', 'value_loss', 'policy_entropy', 'approxkl', 'clipfrac', 'rAt',"unnormal_pt", 'unnormal_nt']
+        self.stats_list = [pg_loss, vf_loss, entropy, approxkl, clipfrac, rAt, unnormal_pt, unnormal_nt]
 
 
         self.train_model = train_model

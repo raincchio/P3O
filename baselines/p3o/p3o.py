@@ -23,10 +23,11 @@ def betafn(val):
         return val*frac
     return f
 
+
 def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2048, ent_coef=0.0, kl_coef=1.0, lr=3e-4,
             vf_coef=0.5,  max_grad_norm=0.5, gamma=0.99, lam=0.95,
             log_interval=10, nminibatches=4, noptepochs=4, cliprange=0.2, beta=15,
-            save_interval=0, load_path=None, model_fn=None, update_fn=None, init_fn=None, mpi_rank_weight=1, comm=None,  **network_kwargs):
+            save_interval=0, load_path=None, model_fn=None, update_fn=None, init_fn=None, mpi_rank_weight=1, comm=None, **network_kwargs):
     '''
     Learn policy using SPG algorithm
 
@@ -77,8 +78,6 @@ def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2
 
     **network_kwargs:                 keyword arguments to the policy / network builder. See baselines.common/policies.py/build_policy and arguments to a particular type of network
                                       For instance, 'mlp' network architecture has arguments num_hidden and num_layers.
-
-
 
     '''
 
@@ -142,6 +141,7 @@ def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2
         frac = 1.0 - (update - 1.0) / nupdates
         # Calculate the learning rate
         lrnow = lr(frac)
+        taunow = 4+2*(1-frac)
         # Calculate the cliprange
         cliprangenow = cliprange(frac)
         betanow = beta(frac)
@@ -176,7 +176,7 @@ def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2
                     mbinds = inds[start:end]
                     slices = (arr[mbinds] for arr in (obs, returns, masks, actions, values, neglogpacs))
                     # print(lrnow, cliprangenow)
-                    res = model.train(lrnow, cliprangenow, betanow, *slices)
+                    res = model.train(lrnow, taunow, cliprangenow, betanow, *slices)
                     # print(res[4].item())
                     mblossvals.append(res)
 

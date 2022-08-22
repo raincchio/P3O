@@ -42,8 +42,10 @@ class Model(object):
                 train_model = policy(nbatch_train, nsteps, sess)
             else:
                 train_model = policy(microbatch_size, nsteps, sess)
+
         with tf.variable_scope("oldpi", reuse=tf.AUTO_REUSE):
             oldpi = policy(nbatch_train, nsteps, sess,observ_placeholder=train_model.X)
+            # oldpi = policy(nbatch_train, nsteps, sess, observation_placeholder=)
 
         # CREATE THE PLACEHOLDERS
         self.A = A = train_model.pdtype.sample_placeholder([None])
@@ -57,6 +59,7 @@ class Model(object):
         self.CLIPRANGE = CLIPRANGE = tf.placeholder(tf.float32, [])
         self.OLDVPRED = OLDVPRED = tf.placeholder(tf.float32, [None])
         self.BETA = BETA = tf.placeholder(tf.float32, [])
+        self.TAU = TAU = tf.placeholder(tf.float32, [])
 
         self.assign = [tf.assign(oldv, newv)
         for (oldv, newv) in zip(get_variables("oldpi"), get_variables("model"))]
@@ -73,6 +76,7 @@ class Model(object):
         # Clip the value to reduce variability during Critic training
         # Get the predicted value
         vpred = train_model.vf
+        vpred2 = train_model.vf2
 
         vpredclipped = tf.clip_by_value(train_model.vf - OLDVPRED, - CLIPRANGE, CLIPRANGE) + OLDVPRED
         # Unclipped value
@@ -89,7 +93,7 @@ class Model(object):
 
         fr_kl_loss = kl_coef*oldpi.pd.kl(train_model.pd)
 
-        pg_losses2 = -ADV*1*tf.sigmoid(4*ratio - 4)
+        pg_losses2 = -ADV*(4.0/self.TAU)*tf.sigmoid(ratio*self.TAU - self.TAU)
 
         # gradient_r_scpi = tf.reduce_mean(-ADV*4*tf.sigmoid(4*ratio - 4)*(1-tf.sigmoid(4*ratio - 4)))
 
@@ -104,11 +108,13 @@ class Model(object):
         clipfrac = tf.reduce_mean(tf.to_float(tf.greater(tf.abs(ratio - 1.0), CLIPRANGE)))
         rAt = tf.reduce_mean(-ADV * ratio)
         # tf.abs(ratio - 1.0) DEON metric
-        ntr = (-1 * tf.math.sign(ratio - 1.0) + 1) / 2
-        nta = (-1 * tf.math.sign(ADV) + 1) / 2
-        ntr_rt = tf.reduce_max(tf.to_float(tf.abs(ratio - 1.0))*ntr)
-        nta_rt = tf.reduce_max(tf.to_float(tf.abs(ratio - 1.0))*nta)
-        mean_rt = tf.reduce_mean(tf.to_float(tf.abs(ratio - 1.0)))
+        ptadv = (tf.math.sign(ADV) + 1) / 2
+        nta = (-1 * tf.math.sign(ratio -1) + 1) / 2
+        ntadv = (-1*tf.math.sign(ADV) + 1) / 2
+        pta = (tf.math.sign(ratio -1) + 1) / 2
+
+        unnormal_pt = tf.reduce_mean(tf.to_float(tf.greater(tf.abs(ratio - 1.0), 0)) * ptadv*nta)
+        unnormal_nt = tf.reduce_mean(tf.to_float(tf.greater(tf.abs(ratio - 1.0), 0)) * ntadv*pta)
         # Total loss
         loss = pg_loss - entropy * ent_coef + vf_loss * vf_coef
 
@@ -134,8 +140,8 @@ class Model(object):
         self.grads = grads
         self.var = var
         self._train_op = self.trainer.apply_gradients(grads_and_var)
-        self.loss_names = ['policy_loss', 'value_loss', 'policy_entropy', 'approxkl', 'clipfrac', 'rAt',"ntr_rt", 'nta_rt', 'mean_rt']
-        self.stats_list = [pg_loss, vf_loss, entropy, approxkl, clipfrac, rAt, ntr_rt, nta_rt, mean_rt]
+        self.loss_names = ['policy_loss', 'value_loss', 'policy_entropy', 'approxkl', 'clipfrac', 'rAt',"unnormal_pt", 'unnormal_nt']
+        self.stats_list = [pg_loss, vf_loss, entropy, approxkl, clipfrac, rAt, unnormal_pt, unnormal_nt]
 
 
         self.train_model = train_model
@@ -152,7 +158,7 @@ class Model(object):
         if MPI is not None:
             sync_from_root(sess, global_variables, comm=comm) #pylint: disable=E1101
 
-    def train(self, lr, cliprange, beta, obs, returns, masks, actions, values, neglogpacs, states=None):
+    def train(self, lr, tau, cliprange, beta, obs, returns, masks, actions, values, neglogpacs, states=None):
         # Here we calculate advantage A(s,a) = R + yV(s') - V(s)
         # Returns = R + yV(s')
         advs = returns - values
@@ -169,7 +175,8 @@ class Model(object):
             self.CLIPRANGE: cliprange,
             self.BETA: beta,
             self.OLDNEGLOGPAC : neglogpacs,
-            self.OLDVPRED : values
+            self.OLDVPRED: values,
+            self.TAU: tau,
         }
         if states is not None:
             td_map[self.train_model.S] = states

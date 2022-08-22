@@ -15,6 +15,9 @@ from baselines import logger
 from importlib import import_module
 from termcolor import colored
 
+# tf.keras.backend.set_floatx('float64')
+
+
 try:
     from mpi4py import MPI
 except ImportError:

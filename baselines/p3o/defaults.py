@@ -6,9 +6,9 @@ def mujoco():
         gamma=0.99,
         noptepochs=10,
         log_interval=1,
-        ent_coef=0.0,
-        kl_coef=0.01,
-        lr=lambda f: 1e-4 * 1.0,
+        ent_coef=0.01,
+        kl_coef=0,
+        lr=lambda f: 3e-4*f,
         cliprange=0.2,
         value_network='copy'
     )

@@ -15,7 +15,7 @@ class PolicyWithValue(object):
     Encapsulates fields and methods for RL policy and value function estimation with shared parameters
     """
 
-    def __init__(self, env, observations, latent, estimate_q=False, vf_latent=None, sess=None, **tensors):
+    def __init__(self, env, observations, latent, estimate_q=False, vf_latent=None, vf_latent2=None, sess=None, **tensors):
         """
         Parameters:
         ----------
@@ -41,6 +41,7 @@ class PolicyWithValue(object):
         vf_latent = vf_latent if vf_latent is not None else latent
 
         vf_latent = tf.layers.flatten(vf_latent)
+        vf_latent2 = tf.layers.flatten(vf_latent2)
         latent = tf.layers.flatten(latent)
 
         # Based on the action space, will select what probability distribution type
@@ -59,9 +60,16 @@ class PolicyWithValue(object):
             assert isinstance(env.action_space, gym.spaces.Discrete)
             self.q = fc(vf_latent, 'q', env.action_space.n)
             self.vf = self.q
+            self.q2 = fc(vf_latent2, 'q2', env.action_space.n)
+            self.vf2 = self.q2
+
+
         else:
             self.vf = fc(vf_latent, 'vf', 1)
             self.vf = self.vf[:,0]
+
+            self.vf2 = fc(vf_latent2, 'vf2', 1)
+            self.vf2 = self.vf2[:, 0]
 
     def _evaluate(self, variables, observation, **extra_feed):
         sess = self.sess
@@ -158,6 +166,7 @@ def build_policy(env, policy_network, value_network=None,  normalize_observation
         else:
             if _v_net == 'copy':
                 _v_net = policy_network
+                _v_net2 = policy_network
             else:
                 assert callable(_v_net)
 
@@ -165,11 +174,16 @@ def build_policy(env, policy_network, value_network=None,  normalize_observation
                 # TODO recurrent architectures are not supported with value_network=copy yet
                 vf_latent = _v_net(encoded_x)
 
+            with tf.variable_scope('vf2', reuse=tf.AUTO_REUSE):
+                # TODO recurrent architectures are not supported with value_network=copy yet
+                vf_latent2 = _v_net2(encoded_x)
+
         policy = PolicyWithValue(
             env=env,
             observations=X,
             latent=policy_latent,
             vf_latent=vf_latent,
+            vf_latent2=vf_latent2,
             sess=sess,
             estimate_q=estimate_q,
             **extra_tensors

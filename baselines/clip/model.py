@@ -1,3 +1,4 @@
+import numpy as np
 import tensorflow as tf
 import functools
 
@@ -56,6 +57,7 @@ class Model(object):
 
         neglogpac = train_model.pd.neglogp(A)
 
+
         # Calculate the entropy
         # Entropy is used to improve exploration by limiting the premature convergence to suboptimal policy.
         entropy = tf.reduce_mean(train_model.pd.entropy())
@@ -77,6 +79,8 @@ class Model(object):
         # Calculate ratio (pi current policy / pi old policy)
         ratio = tf.exp(OLDNEGLOGPAC - neglogpac)
 
+        self.NEG = neglogpac
+
         # Defining Loss = - J is equivalent to max J
         pg_losses = -ADV * ratio
 
@@ -89,10 +93,12 @@ class Model(object):
         clipfrac = tf.reduce_mean(tf.to_float(tf.greater(tf.abs(ratio - 1.0), CLIPRANGE)))
         # DEON metric
         ptadv = (tf.math.sign(ADV) + 1) / 2
-        ntadv = (-1 * tf.math.sign(ADV) + 1) / 2
-        mean_ratio = tf.reduce_mean(tf.to_float(tf.abs(ratio - 1.0)))
-        pt_max_ratio = tf.reduce_max(tf.to_float(tf.abs(ratio - 1.0)) * ptadv)
-        nt_max_ratio = tf.reduce_max(tf.to_float(tf.abs(ratio - 1.0)) * ntadv)
+        nta = (-1 * tf.math.sign(ratio -1) + 1) / 2
+        ntadv = (-1*tf.math.sign(ADV) + 1) / 2
+        pta = (tf.math.sign(ratio -1) + 1) / 2
+
+        unnormal_pt = tf.reduce_mean(tf.to_float(tf.greater(tf.abs(ratio - 1.0), 0)) * ptadv*nta)
+        unnormal_nt = tf.reduce_mean(tf.to_float(tf.greater(tf.abs(ratio - 1.0), 0)) * ntadv*pta)
 
         # Total loss
         loss = pg_loss - entropy * ent_coef + vf_loss * vf_coef
@@ -119,8 +125,8 @@ class Model(object):
         self.grads = grads
         self.var = var
         self._train_op = self.trainer.apply_gradients(grads_and_var)
-        self.loss_names = ['policy_loss', 'value_loss', 'policy_entropy', 'approxkl', 'clipfrac', 'mean_ratio','pt_max_ratio',"nt_max_ratio"]
-        self.stats_list = [pg_loss, vf_loss, entropy, approxkl, clipfrac, mean_ratio, pt_max_ratio, nt_max_ratio]
+        self.loss_names = ['policy_loss', 'value_loss', 'policy_entropy', 'approxkl', 'clipfrac', 'unnormal_pt','unnormal_nt']
+        self.stats_list = [pg_loss, vf_loss, entropy, approxkl, clipfrac, unnormal_pt, unnormal_nt]
 
 
         self.train_model = train_model
@@ -143,7 +149,7 @@ class Model(object):
         advs = returns - values
 
         # Normalize the advantages
-        advs = (advs - advs.mean()) / (advs.std() + 1e-8)
+        # advs = (advs - advs.mean()) / (advs.std() + 1e-8)
 
         td_map = {
             self.train_model.X : obs,
@@ -159,8 +165,26 @@ class Model(object):
             td_map[self.train_model.S] = states
             td_map[self.train_model.M] = masks
 
-        return self.sess.run(
+        # print('adv')
+        # print(advs)
+        # print('old')
+        # print(np.exp(-neglogpacs))
+        # print('new')
+        # neg = self.sess.run(self.NEG, td_map)
+
+        # self.sess.run(self.lo, td_map)
+        # print(np.exp(-neg))
+
+        res = self.sess.run(
             self.stats_list + [self._train_op],
             td_map
         )[:-1]
+        # if res[5]!=0 or res[6]!=0:
+        #     print(advs)
+        #     print(np.exp(-neglogpacs))
+        #     print(np.exp(-neg))
+
+
+
+        return res
 
