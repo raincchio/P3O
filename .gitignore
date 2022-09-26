@@ -5,3 +5,4 @@
 *.pyc
 baselines/bench/__pycache__/monitor.cpython-310.pyc
 *.pyc
+*.pdf

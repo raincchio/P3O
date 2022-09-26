@@ -14,7 +14,7 @@ rc_fonts = {
     "font.size": 10,
     'axes.titlesize':10,
     "legend.fontsize":8,
-    'figure.figsize': (8.5, 4.5),
+    'figure.figsize': (8.5, 5),
     # 'figure.figsize': (7, 7/2.0*0.75),
     # "text.usetex": True,
     # 'text.latex.preview': True,
@@ -77,8 +77,8 @@ def default_xy_fn(r):
         x = np.cumsum(r.monitor.l)
         y = smooth(r.monitor.r, radius=10)
     except:
-        y = smooth(r.progress['return-average'], radius=10)
-        x = r.progress['total-samples']
+        y = smooth(r.progress['eprewmean'], radius=10)
+        x = r.progress['misc/total_timesteps']
     return x,y
 def plot_results(
         allresults, *,
@@ -159,15 +159,13 @@ def plot_results(
                 if resample:
                     print(isplit, sk)
                     low = max(x[0] for x in origxs)
-                    # if sk in ['Enduro', 'Breakout', 'BeamRider']:
-                    #     high = 9e6
-                    #
-                    # else:
-                    #     high = min(x[-1] for x in origxs)
                     high = min(x[-1] for x in origxs)
                     usex = np.linspace(low, high, resample)
                     ys = []
                     for (x, y) in xys:
+
+                        y[np.isnan(y)] = 0
+
                         ys.append(symmetric_ema(x, y, low, high, resample, decay_steps=smooth_step)[1])
                 else:
                     assert allequal([x[:minxlen] for x in origxs]), \
@@ -214,7 +212,7 @@ def plot_results(
                 plt.ylabel(ylabel)
         g2ls.append(g2l)
     tt= {'ddpo':'P3O','vpgdualclip':'Dual-Clip PPO',
-         'acktr':'ACKTR','ppo2':'PPO','trpo':'TRPO','a2c':'A2C'}
+         'acktr':'ACKTR','ppo2':'PPO','trpo':'TRPO','a2c':'A2C','clip':'CLIP'}
 
     tt_s = g2ls[0]
 
@@ -232,10 +230,12 @@ def plot_results(
 
 def paper_image():
 
-    path = [r'C:\Users\chenxing\0323\DDPO\performence',]
+    path = [
+        r'C:\Users\chenxing\0323\DDPO\performance',
+            r"C:\Users\chenxing\0323\extra_test"]
     save_name = 'performence'
 
-    results = plot_util.load_results(path, enable_monitor=True, enable_progress=False)
+    results = plot_util.load_results(path, enable_monitor=True, enable_progress=True)
     plot_results(results, split_fn=group_by_name, group_fn=group_by_seed, average_group=True,
                  shaded_std=True,shaded_err=False, xlabel=X_TIMESTEPS,
                  ylabel=Y_REWARD,row=2)

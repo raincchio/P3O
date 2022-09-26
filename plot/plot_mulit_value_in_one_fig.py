@@ -36,7 +36,7 @@ Y_REWARD = 'reward'
 Y_TIMESTEPS = 'timesteps'
 POSSIBLE_X_AXES = [X_TIMESTEPS, X_EPISODES, X_WALLTIME]
 EPISODES_WINDOW = 100
-COLORS = ['blue', 'blue', 'blue', 'green', 'green',
+COLORS = ['green', 'blue', 'green', 'blue',
           'green', 'teal', 'turquoise',
           'darkgreen', 'tan', 'salmon', 'gold',  'darkred', 'darkblue']
 
@@ -117,7 +117,7 @@ def plot_results(
     default_samples = 512
     if average_group:
         resample = resample or default_samples
-    fmts=['+', '-', '--', '.', '-', '--', ]
+    fmts=['.', '-', '-','--',   '--', ]
     g2ls = []
     g2cs = []
     # for (isplit, sk) in enumerate(sk2r.keys()):
@@ -133,21 +133,23 @@ def plot_results(
         for result in sresults:
             group = group_fn(result)
 
-            group_ = group+'_mean'
+            group_ = 'mean abs(r-1) of ' + group
             g2c[group_] += 1
             x, y = xy_fn(result,'mean_rt')
             if x is None: x = np.arange(len(y))
             x, y = map(np.asarray, (x, y))
             gresults[group_].append((x,y))
 
-            group_ = group+'_ntr'
+            group_ = 'max(abs(r-1)) when r<1 of ' + group
             g2c[group_] += 1
             x, y = xy_fn(result,'ntr_rt')
             if x is None: x = np.arange(len(y))
             x, y = map(np.asarray, (x, y))
             gresults[group_].append((x,y))
 
-            group_ = group+'_nta'
+
+            if group=="p3o":continue
+            group_ = 'max(abs(r-1)) when adv<0 of ' + group
             g2c[group_] += 1
             x, y = xy_fn(result,'nta_rt')
             if x is None: x = np.arange(len(y))
@@ -206,8 +208,9 @@ def plot_results(
                         ax.vlines(x, ymin[::default_samples//need_point], ymax[::default_samples//need_point], color=color,alpha=.5)
                     else:
                         ax.fill_between(usex, ymean - ystd,    ymean + ystd,    color=color, alpha=.2)
-
-        plt.tight_layout()
+            l = ax.hlines(1,0,3e6, colors='red')
+            g2l['value=1'] = l
+        # plt.tight_layout()
 
 
         ax.set_title('('+chr(isplit+97)+') '+sk)
@@ -225,12 +228,11 @@ def plot_results(
     tt= {'ddpo':'P3O','vpgdualclip':'Dual-Clip PPO',
          'acktr':'ACKTR','ppo2':'PPO','trpo':'TRPO','a2c':'A2C'}
 
-    tt_s = g2ls[0]
 
     ad = g2ls[0]
 
 
-    axarr[0][0].legend(ad.values(), [tt[g] if g in tt.keys() else g for g in ad],edgecolor='None', facecolor='None')
+    axarr[0][0].legend(ad.values(), [tt[g] if g in tt.keys() else g for g in ad],edgecolor='None', facecolor='None',loc=(3.5, 0.5))
 
     return f, axarr
 
@@ -256,8 +258,8 @@ def paper_image():
                  ylabel=r'$\max(|r - 1|)$',row=1)
 
     fig = plt.gcf()
-    plt.show()
-    # fig.savefig('png'+os.sep+save_name+'.pdf',bbox_inches='tight',dpi=300, backend='pdf')
+    # plt.show()
+    fig.savefig('png'+os.sep+save_name+'.pdf',bbox_inches='tight',dpi=300, backend='pdf')
     # fig.savefig('png/'+save_name+'.pdf',dpi=300, backend='pdf')
 
 if __name__ == '__main__':
