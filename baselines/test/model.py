@@ -25,7 +25,7 @@ class Model(object):
     - Save load the model
     """
     def __init__(self, *, policy, ob_space, ac_space, nbatch_act, nbatch_train,
-                nsteps, ent_coef, kl_coef, vf_coef, max_grad_norm, mpi_rank_weight=1, comm=None, microbatch_size=None):
+                nsteps, ent_coef, kl_coef, vf_coef, max_grad_norm, mpi_rank_weight=1, comm=None, microbatch_size=None,boundaction=False):
         self.sess = sess = get_session()
 
         if MPI is not None and comm is None:
@@ -75,31 +75,27 @@ class Model(object):
 
         # Clip the value to reduce variability during Critic training
         # Get the predicted value
-        vpred = train_model.vf
-        # vpred2 = train_model.vf2
+        vpred1 = train_model.vf
 
-        vpredclipped = tf.clip_by_value(train_model.vf - OLDVPRED, - CLIPRANGE, CLIPRANGE) + OLDVPRED
+        # vpredclipped = tf.clip_by_value(train_model.vf - OLDVPRED, - CLIPRANGE, CLIPRANGE) + OLDVPRED
         # Unclipped value
 
-        vf_clip_losses = tf.square(vpredclipped - R)
-        # Clipped value
-        vf_losses = tf.square(vpred - R)
+        # vf_loss1 = tf.square(vpred2 - R)
+        vf_loss2 = tf.square(vpred1 - R)
 
-        vf_loss = .1 * tf.reduce_mean(tf.maximum(vf_losses, vf_clip_losses))
-        # vf_loss = .5 * tf.reduce_mean(vf_losses)
+        # vf_maximum = tf.maximum(vf_loss1, vf_loss2)
+        vf_loss = .5 * tf.reduce_mean(vf_loss2)
 
         # Calculate ratio (pi current policy / pi old policy)
         ratio = tf.exp(OLDNEGLOGPAC - neglogpac)
 
         fr_kl_loss = kl_coef*oldpi.pd.kl(train_model.pd)
 
-        pg_losses2 = -ADV*(4.0/self.TAU)*tf.sigmoid(ratio*self.TAU - self.TAU)
+        actor_loss = -ADV*(4.0/self.TAU)*tf.sigmoid(ratio*self.TAU - self.TAU)
 
-        # gradient_r_scpi = tf.reduce_mean(-ADV*4*tf.sigmoid(4*ratio - 4)*(1-tf.sigmoid(4*ratio - 4)))
+        pg_loss = tf.reduce_mean(actor_loss) + tf.reduce_mean(fr_kl_loss) - entropy * ent_coef
 
-        pg_loss = tf.reduce_mean(pg_losses2)
 
-        pg_loss += tf.reduce_mean(fr_kl_loss)
 
         #static
         approxkl = .5 * tf.reduce_mean(tf.square(neglogpac - OLDNEGLOGPAC))
@@ -115,23 +111,21 @@ class Model(object):
         unnormal_pt = tf.reduce_mean(tf.to_float(tf.greater(tf.abs(ratio - 1.0), 0)) * ptadv*nta)
         unnormal_nt = tf.reduce_mean(tf.to_float(tf.greater(tf.abs(ratio - 1.0), 0)) * ntadv*pta)
         # Total loss
-        loss = pg_loss - entropy * ent_coef + vf_loss * vf_coef
+
 
         # UPDATE THE PARAMETERS USING LOSS
         # 1. Get the model parameters
         params = tf.trainable_variables('model')
         # 2. Build our trainer
-        if comm is not None and comm.Get_size() > 1:
-            self.trainer = MpiAdamOptimizer(comm, learning_rate=LR, mpi_rank_weight=mpi_rank_weight, epsilon=1e-5)
-        else:
-            self.trainer = tf.train.AdamOptimizer(learning_rate=LR, epsilon=1e-5)
-            # self.trainer = tf.train.GradientDescentOptimizer(learning_rate=LR)
+        self.trainer = tf.train.AdamOptimizer(learning_rate=LR, epsilon=1e-5)
+
         # 3. Calculate the gradients
-        grads_and_var = self.trainer.compute_gradients(loss, params)
+        grads_and_var = self.trainer.compute_gradients(pg_loss, params)
         grads, var = zip(*grads_and_var)
 
         if max_grad_norm is not None:
             # Clip the gradients (normalize)
+            # pass
             grads, _grad_norm = tf.clip_by_global_norm(grads, max_grad_norm)
         grads_and_var = list(zip(grads, var))
         # zip aggregate each gradient with parameters associated

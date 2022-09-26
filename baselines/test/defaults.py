@@ -10,8 +10,9 @@ def mujoco():
         kl_coef=0.05,
         lr=lambda f: 3e-4*f,
         cliprange=0.2,
-        value_network='copy'
-        #random seed 4
+        value_network='copy',
+        squash=False
+        #quan
     )
 def mujoco_bak():
     return dict(

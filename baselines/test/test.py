@@ -11,7 +11,7 @@ try:
     from mpi4py import MPI
 except ImportError:
     MPI = None
-from baselines.p3o.runner import Runner
+from baselines.test.runner import Runner
 
 
 def constfn(val):
@@ -107,7 +107,7 @@ def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2
 
     # Instantiate the model object (that creates act_model and train_model)
     if model_fn is None:
-        from baselines.p3o.model import Model
+        from baselines.test.model import Model
         model_fn = Model
 
     model = model_fn(policy=policy, ob_space=ob_space, ac_space=ac_space, nbatch_act=nenvs, nbatch_train=nbatch_train,
@@ -132,6 +132,8 @@ def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2
     tfirststart = time.perf_counter()
 
     nupdates = total_timesteps//nbatch
+    R_buffer = []
+    V_buffer = []
     for update in range(1, nupdates+1):
         assert nbatch % nminibatches == 0
         # Start timer
@@ -171,13 +173,21 @@ def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2
                 np.random.shuffle(inds)
                 # 0 to batch_size with batch_train_size step
                 for start in range(0, nbatch, nbatch_train):
-                    end = start + nbatch_train
-                    mbinds = inds[start:end]
-                    slices = (arr[mbinds] for arr in (obs, returns, masks, actions, values, neglogpacs))
-                    # print(lrnow, cliprangenow)
-                    res = model.train(lrnow, taunow, cliprangenow, betanow, *slices)
-                    # print(res[4].item())
-                    mblossvals.append(res)
+                        end = start + nbatch_train
+                        mbinds = inds[start:end]
+                        slices = (arr[mbinds] for arr in (obs, returns, masks, actions, values, neglogpacs))
+                        res = model.train(lrnow, taunow, cliprangenow, betanow, *slices)
+                        mblossvals.append(res)
+                # slices = (obs, returns, masks, actions, values, neglogpacs)
+                # res = model.train(lrnow, taunow, cliprangenow, betanow, *slices)
+                # mblossvals.append(res)
+
+            # if R_buffer is None:
+            #     advs = returns - values
+            #
+            #     # Normalize the advantages
+            #     advs = (advs - advs.mean()) / (advs.std() + 1e-8)
+            #     R_buffer
 
         else: # recurrent version
             assert nenvs % nminibatches == 0

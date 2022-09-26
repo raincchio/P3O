@@ -26,6 +26,26 @@ class SeqWriter(object):
 
 class HumanOutputFormat(KVWriter, SeqWriter):
     def __init__(self, filename_or_file):
+        #update needed
+        self.k2v = {
+            'misc/serial_timesteps':"srl_tss",
+            'misc/nupdates':"npdt",
+            'misc/total_timesteps':"ttl_tss",
+            'fps':"fps",
+            'misc/explained_variance':"ev",
+            'eprewmean':"rew",
+            'eplenmean':"len",
+            'misc/time_elapsed':"time",
+            'loss/policy_loss':"p_loss",
+            'loss/value_loss':"v_loss",
+            'loss/policy_entropy':"etp",
+            'loss/approxkl':"kl",
+            'loss/clipfrac':"clipf",
+            'loss/rAt':'rAt',
+            'loss/unnormal_pt':"u_pt",
+            'loss/unnormal_nt':"u_nt"
+
+        }
         if isinstance(filename_or_file, str):
             self.file = open(filename_or_file, 'wt')
             self.own_file = True
@@ -53,15 +73,35 @@ class HumanOutputFormat(KVWriter, SeqWriter):
             valwidth = max(map(len, key2str.values()))
 
         # Write out the data
-        dashes = '-' * (keywidth + valwidth + 7)
+        lens = []
+        line1 = ""
+        line2 = ""
+        for k,v in key2str.items():
+            if k in self.k2v.keys():
+                cpk = self.k2v[k]
+            else:
+                cpk = k
+            v = v.strip()
+            ocu = max(len(cpk), len(v))+3
+
+            lens.append(ocu)
+            line1+= cpk+' '*(ocu -len(cpk))
+            line2 += v + ' ' * (ocu - len(v))
+
+        # dashes = '-' * (keywidth + valwidth + 7)
+        dashes = '-'*sum(lens)
         lines = [dashes]
-        for (key, val) in sorted(key2str.items(), key=lambda kv: kv[0].lower()):
-            lines.append('| %s%s | %s%s |' % (
-                key,
-                ' ' * (keywidth - len(key)),
-                val,
-                ' ' * (valwidth - len(val)),
-            ))
+        # for (key, val) in sorted(key2str.items(), key=lambda kv: kv[0].lower()):
+        #     lines.append('| %s%s | %s%s |' % (
+        #         key,
+        #         ' ' * (keywidth - len(key)),
+        #         val,
+        #         ' ' * (valwidth - len(val)),
+        #     ))
+
+        lines.append(line1)
+        lines.append(line2)
+
         lines.append(dashes)
         self.file.write('\n'.join(lines) + '\n')
 

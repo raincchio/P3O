@@ -101,6 +101,7 @@ class DiagGaussianPdType(PdType):
 
     def pdfromlatent(self, latent_vector, init_scale=1.0, init_bias=0.0):
         mean = _matching_fc(latent_vector, 'pi', self.size, init_scale=init_scale, init_bias=init_bias)
+        # logstd = _matching_fc(latent_vector, 'pi/logstd', self.size, init_scale=init_scale, init_bias=init_bias)
         logstd = tf.get_variable(name='pi/logstd', shape=[1, self.size], initializer=tf.zeros_initializer())
         pdparam = tf.concat([mean, mean * 0.0 + logstd], axis=1)
         return self.pdfromflat(pdparam), mean
@@ -236,13 +237,9 @@ class DiagGaussianPd(Pd):
     def mode(self):
         return self.mean
     def neglogp(self, x):
-        return 0.5 * tf.reduce_sum(tf.square((x - self.mean) / self.std), axis=-1) \
-               + 0.5 * np.log(2.0 * np.pi) * tf.to_float(tf.shape(x)[-1]) \
-               + tf.reduce_sum(self.logstd, axis=-1)
-    def DiagGaussianPd(self, x):
-        return 0.5 * tf.reduce_sum(tf.square((x - self.mean) / self.std), axis=-1) \
-               + 0.5 * np.log(2.0 * np.pi) * tf.to_float(tf.shape(x)[-1]) \
-               + tf.reduce_sum(self.logstd, axis=-1)
+        pre_sum = 0.5 * (((x - self.mean) / (self.std+1e-8)) ** 2 + 2 * self.logstd + np.log(2 * np.pi))
+        return tf.reduce_sum(pre_sum, axis=1)
+
     def kl(self, other):
         assert isinstance(other, DiagGaussianPd)
         return tf.reduce_sum(other.logstd - self.logstd + (tf.square(self.std) + tf.square(self.mean - other.mean)) / (2.0 * tf.square(other.std)) - 0.5, axis=-1)
@@ -253,6 +250,36 @@ class DiagGaussianPd(Pd):
     @classmethod
     def fromflat(cls, flat):
         return cls(flat)
+
+# class SquashDiagGaussianPd(Pd):
+#     def __init__(self, flat):
+#         self.flat = flat
+#         mean, logstd = tf.split(axis=len(flat.shape)-1, num_or_size_splits=2, value=flat)
+#         self.mean = mean
+#         self.logstd = logstd
+#         self.std = tf.exp(logstd)
+#     def flatparam(self):
+#         return self.flat
+#     def mode(self):
+#         return self.mean
+#     def neglogp(self, x):
+#         return 0.5 * tf.reduce_sum(tf.square((x - self.mean) / self.std), axis=-1) \
+#                + 0.5 * np.log(2.0 * np.pi) * tf.to_float(tf.shape(x)[-1]) \
+#                + tf.reduce_sum(self.logstd, axis=-1)
+#     def SquashDiagGaussianPd(self, x):
+#         return 0.5 * tf.reduce_sum(tf.square((x - self.mean) / self.std), axis=-1) \
+#                + 0.5 * np.log(2.0 * np.pi) * tf.to_float(tf.shape(x)[-1]) \
+#                + tf.reduce_sum(self.logstd, axis=-1)
+#     def kl(self, other):
+#         assert isinstance(other, SquashDiagGaussianPd)
+#         return tf.reduce_sum(other.logstd - self.logstd + (tf.square(self.std) + tf.square(self.mean - other.mean)) / (2.0 * tf.square(other.std)) - 0.5, axis=-1)
+#     def entropy(self):
+#         return tf.reduce_sum(self.logstd + .5 * np.log(2.0 * np.pi * np.e), axis=-1)
+#     def sample(self):
+#         return self.mean + self.std * tf.random_normal(tf.shape(self.mean))
+#     @classmethod
+#     def fromflat(cls, flat):
+#         return cls(flat)
 
 
 class BernoulliPd(Pd):
@@ -279,11 +306,14 @@ class BernoulliPd(Pd):
     def fromflat(cls, flat):
         return cls(flat)
 
-def make_pdtype(ac_space):
+def make_pdtype(ac_space,squash=False):
     from gym import spaces
     if isinstance(ac_space, spaces.Box):
         assert len(ac_space.shape) == 1
-        return DiagGaussianPdType(ac_space.shape[0])
+        if squash:
+            return DiagGaussianPdType(ac_space.shape[0])
+        else:
+            return DiagGaussianPdType(ac_space.shape[0])
     elif isinstance(ac_space, spaces.Discrete):
         return CategoricalPdType(ac_space.n)
     elif isinstance(ac_space, spaces.MultiDiscrete):

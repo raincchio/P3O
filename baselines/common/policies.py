@@ -49,27 +49,36 @@ class PolicyWithValue(object):
 
         self.pd, self.pi = self.pdtype.pdfromlatent(latent, init_scale=0.01)
 
-        # Take an action
-        self.action = self.pd.sample()
+        if "squash" in tensors.keys():
+            action = self.pd.sample()
+            neglogp = self.pd.neglogp(action)
+            self.neglogp = neglogp + tf.reduce_sum(2 * (tf.log(2.0) - action - tf.nn.softplus(-2 * action)), axis=1)
+            # Squash those unbounded actions!
+            self.action = tf.tanh(action)*env.action_space.high
+        else:
+            # Take an action
+            self.action = self.pd.sample()
 
-        # Calculate the neg log of our probability
-        self.neglogp = self.pd.neglogp(self.action)
+            # Calculate the neg log of our probability
+            self.neglogp = self.pd.neglogp(self.action)
+
+
         self.sess = sess or tf.get_default_session()
 
         if estimate_q:
             assert isinstance(env.action_space, gym.spaces.Discrete)
             self.q = fc(vf_latent, 'q', env.action_space.n)
             self.vf = self.q
-            self.q2 = fc(vf_latent2, 'q2', env.action_space.n)
-            self.vf2 = self.q2
+            # self.q2 = fc(vf_latent2, 'q2', env.action_space.n)
+            # self.vf2 = self.q2
 
 
         else:
             self.vf = fc(vf_latent, 'vf', 1)
             self.vf = self.vf[:,0]
 
-            self.vf2 = fc(vf_latent2, 'vf2', 1)
-            self.vf2 = self.vf2[:, 0]
+            # self.vf2 = fc(vf_latent2, 'vf2', 1)
+            # self.vf2 = self.vf2[:, 0]
 
     def _evaluate(self, variables, observation, **extra_feed):
         sess = self.sess
@@ -137,6 +146,8 @@ def build_policy(env, policy_network, value_network=None,  normalize_observation
         X = observ_placeholder if observ_placeholder is not None else observation_placeholder(ob_space, batch_size=nbatch)
 
         extra_tensors = {}
+        if "squash" in policy_kwargs.keys():
+            extra_tensors['squash'] = policy_kwargs['squash']
 
         if normalize_observations and X.dtype == tf.float32:
             encoded_x, rms = _normalize_clip_observation(X)
