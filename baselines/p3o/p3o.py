@@ -139,7 +139,7 @@ def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2
         frac = 1.0 - (update - 1.0) / nupdates
         # Calculate the learning rate
         lrnow = lr(frac)
-        taunow = 2+2*(1-frac)
+        # taunow = 2+2*(1-frac)
         taunow = 4
         # Calculate the cliprange
         cliprangenow = cliprange(frac)
