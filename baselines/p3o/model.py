@@ -1,186 +1,220 @@
-import tensorflow as tf
-import functools
-
-from baselines.common.tf_util import get_session, save_variables, load_variables
-from baselines.common.tf_util import initialize
-from baselines.common.input import observation_placeholder
+import os
+import random
+import time
+import numpy as np
+import os.path as osp
+from baselines import logger
+from collections import deque
+from baselines.common import explained_variance, set_global_seeds
+from baselines.common.policies import build_policy
 try:
-    from baselines.common.mpi_adam_optimizer import MpiAdamOptimizer
     from mpi4py import MPI
-    from baselines.common.mpi_util import sync_from_root
 except ImportError:
     MPI = None
-
-class Model(object):
-    """
-    We use this object to :
-    __init__:
-    - Creates the step_model
-    - Creates the train_model
-
-    train():
-    - Make the training part (feedforward and retropropagation of gradients)
-
-    save/load():
-    - Save load the model
-    """
-    def __init__(self, *, policy, nbatch_act, nbatch_train,
-                nsteps, ent_coef, kl_coef, vf_coef, tau, max_grad_norm, mpi_rank_weight=1, comm=None, microbatch_size=None):
-        self.sess = sess = get_session()
-
-        if MPI is not None and comm is None:
-            comm = MPI.COMM_WORLD
-        # observation_placeholder(ob_space, batch_size=nbatch_train)
-
-        with tf.variable_scope('model', reuse=tf.AUTO_REUSE):
-            # CREATE OUR TWO MODELS
-            # act_model that is used for sampling
-            act_model = policy(nbatch_act, 1, sess)
-
-            # Train model for training
-            if microbatch_size is None:
-                train_model = policy(nbatch_train, nsteps, sess)
-            else:
-                train_model = policy(microbatch_size, nsteps, sess)
-
-        with tf.variable_scope("oldpi", reuse=tf.AUTO_REUSE):
-            oldpi = policy(nbatch_train, nsteps, sess,observ_placeholder=train_model.X)
-            # oldpi = policy(nbatch_train, nsteps, sess, observation_placeholder=)
-
-        # CREATE THE PLACEHOLDERS
-        self.A = A = train_model.pdtype.sample_placeholder([None])
-        self.ADV = ADV = tf.placeholder(tf.float32, [None])
-        self.R = R = tf.placeholder(tf.float32, [None])
-        # Keep track of old actor
-        self.OLDNEGLOGPAC = OLDNEGLOGPAC = tf.placeholder(tf.float32, [None])
-        # Keep track of old critic
-        self.LR = LR = tf.placeholder(tf.float32, [])
-        # Cliprange
-        self.CLIPRANGE = CLIPRANGE = tf.placeholder(tf.float32, [])
-        self.OLDVPRED = OLDVPRED = tf.placeholder(tf.float32, [None])
-        self.TAU = None
-
-        self.assign = [tf.assign(oldv, newv)
-        for (oldv, newv) in zip(get_variables("oldpi"), get_variables("model"))]
-
-        neglogpac = train_model.pd.neglogp(A)
-
-        # Calculate the entropy
-        # Entropy is used to improve exploration by limiting the premature convergence to suboptimal policy.
-        entropy = tf.reduce_mean(train_model.pd.entropy())
+from baselines.p3o.runner import Runner
 
 
-        # Clip the value to reduce variability during Critic training
-        # Get the predicted value
-        vpred = train_model.vf
-        vpredclipped = tf.clip_by_value(train_model.vf - OLDVPRED, - CLIPRANGE, CLIPRANGE) + OLDVPRED
-        # Unclipped value
-        vf_clip_losses = tf.square(vpredclipped - R)
-        # Clipped value
-        vf_losses = tf.square(vpred - R)
+def constfn(val):
+    def f(_):
+        return val
+    return f
+def betafn(val):
+    def f(frac):
+        return val*frac
+    return f
 
-        vf_loss = tf.reduce_mean(tf.maximum(vf_losses, vf_clip_losses))*0.5
 
-        # Calculate ratio (pi current policy / pi old policy)
-        ratio = tf.exp(OLDNEGLOGPAC - neglogpac)
+def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2048, ent_coef=0.0, kl_coef=1.0, lr=3e-4,
+            vf_coef=0.5,  max_grad_norm=0.5, gamma=0.99, lam=0.95,
+            log_interval=10, nminibatches=4, noptepochs=4, cliprange=0.2, tau=4,
+            save_interval=0, load_path=None, model_fn=None, update_fn=None, init_fn=None, mpi_rank_weight=1, comm=None, **network_kwargs):
+    '''
+    Learn policy using SPG algorithm
 
-        fr_kl_loss = kl_coef*oldpi.pd.kl(train_model.pd)
-        # fr_kl_loss = kl_coef * train_model.pd.kl(oldpi.pd)
+    Parameters:
+    ----------
 
-        # tau1 need to be great than or equal to 2 to make soft-clip objective is a lower bound of the original one
-        # tau2 control the effective gradient span,
-        # to get accelerate effect, by setting 0.5*.5*4/tau1*tau2 >1
+    network:                          policy network architecture. Either string (mlp, lstm, lnlstm, cnn_lstm, cnn, cnn_small, conv_only - see baselines.common/models.py for full list)
+                                      specifying the standard network architecture, or a function that takes tensorflow tensor as input and returns
+                                      tuple (output_tensor, extra_feed) where output tensor is the last network layer output, extra_feed is None for feed-forward
+                                      neural nets, and extra_feed is a dictionary describing how to feed state into the network for recurrent neural nets.
+                                      See common/models.py/lstm for more details on using recurrent nets in policies
 
-        pg_losses2 = -ADV*(4.0/tau)*tf.sigmoid(ratio*tau - tau) # soft clip objective
+    env: baselines.common.vec_env.VecEnv     environment. Needs to be vectorized for parallel environment simulation.
+                                      The environments produced by gym.make can be wrapped using baselines.common.vec_env.DummyVecEnv class.
 
-        # gradient_r_scpi = tf.reduce_mean(-ADV*4*tf.sigmoid(4*ratio - 4)*(1-tf.sigmoid(4*ratio - 4)))
 
-        pg_loss = tf.reduce_mean(pg_losses2)
+    nsteps: int                       number of steps of the vectorized environment per update (i.e. batch size is nsteps * nenv where
+                                      nenv is number of environment copies simulated in parallel)
 
-        pg_loss += tf.reduce_mean(fr_kl_loss)
+    total_timesteps: int              number of timesteps (i.e. number of actions taken in the environment)
 
-        #static
-        approxkl = .5 * tf.reduce_mean(tf.square(neglogpac - OLDNEGLOGPAC))
-        clipfrac = tf.reduce_mean(tf.to_float(tf.greater(tf.abs(ratio - 1.0), CLIPRANGE)))
-        rAt = tf.reduce_mean(-ADV * ratio)
+    ent_coef: float                   policy entropy coefficient in the optimization objective
 
-        # tf.abs(ratio - 1.0) DEON metric
-        ptadv = (tf.math.sign(ADV) + 1) / 2
-        nta = (-1 * tf.math.sign(ratio -1) + 1) / 2
-        ntadv = (-1*tf.math.sign(ADV) + 1) / 2
-        pta = (tf.math.sign(ratio -1) + 1) / 2
+    lr: float or function             learning rate, constant or a schedule function [0,1] -> R+ where 1 is beginning of the
+                                      training and 0 is the end of the training.
 
-        unnormal_pt = tf.reduce_mean(tf.to_float(tf.greater(tf.abs(ratio - 1.0), 0)) * ptadv*nta)
-        unnormal_nt = tf.reduce_mean(tf.to_float(tf.greater(tf.abs(ratio - 1.0), 0)) * ntadv*pta)
-        # Total loss
-        loss = pg_loss - entropy * ent_coef + vf_loss * vf_coef
+    vf_coef: float                    value function loss coefficient in the optimization objective
 
-        # UPDATE THE PARAMETERS USING LOSS
-        # 1. Get the model parameters
-        params = tf.trainable_variables('model')
-        # 2. Build our trainer
-        if comm is not None and comm.Get_size() > 1:
-            self.trainer = MpiAdamOptimizer(comm, learning_rate=LR, mpi_rank_weight=mpi_rank_weight, epsilon=1e-5)
-        else:
-            self.trainer = tf.train.AdamOptimizer(learning_rate=LR, epsilon=1e-5)
-            # self.trainer = tf.train.GradientDescentOptimizer(learning_rate=LR)
-        # 3. Calculate the gradients
-        grads_and_var = self.trainer.compute_gradients(loss, params)
-        grads, var = zip(*grads_and_var)
+    max_grad_norm: float or None      gradient norm clipping coefficient
 
-        if max_grad_norm is not None:
-            # Clip the gradients (normalize)
-            grads, _grad_norm = tf.clip_by_global_norm(grads, max_grad_norm)
-        grads_and_var = list(zip(grads, var))
-        # zip aggregate each gradient with parameters associated
-        # For instance zip(ABCD, xyza) => Ax, By, Cz, Da
+    gamma: float                      discounting factor
 
-        self.grads = grads
-        self.var = var
-        self._train_op = self.trainer.apply_gradients(grads_and_var)
-        self.loss_names = ['policy_loss', 'value_loss', 'policy_entropy', 'approxkl', 'clipfrac', 'rAt',"unnormal_pt", 'unnormal_nt']
-        self.stats_list = [pg_loss, vf_loss, entropy, approxkl, clipfrac, rAt, unnormal_pt, unnormal_nt]
+    lam: float                        advantage estimation discounting factor (lambda in the paper)
 
-        self.train_model = train_model
-        self.act_model = act_model
-        self.step = act_model.step
-        self.value = act_model.value
-        self.initial_state = act_model.initial_state
+    log_interval: int                 number of timesteps between logging events
 
-        self.save = functools.partial(save_variables, sess=sess)
-        self.load = functools.partial(load_variables, sess=sess)
+    nminibatches: int                 number of training minibatches per update. For recurrent policies,
+                                      should be smaller or equal than number of environments run in parallel.
 
-        initialize()
-        global_variables = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="")
-        if MPI is not None:
-            sync_from_root(sess, global_variables, comm=comm) #pylint: disable=E1101
+    noptepochs: int                   number of training epochs per update
 
-    def train(self, lr, cliprange, obs, returns, masks, actions, values, neglogpacs, states=None):
-        # Here we calculate advantage A(s,a) = R + yV(s') - V(s)
-        # Returns = R + yV(s')
-        advs = returns - values
+    cliprange: float or function      clipping range, constant or schedule function [0,1] -> R+ where 1 is beginning of the training
+                                      and 0 is the end of the training
 
-        # Normalize the advantages
-        advs = (advs - advs.mean()) / (advs.std() + 1e-8)
+    save_interval: int                number of timesteps between saving events
 
-        td_map = {
-            self.train_model.X: obs,
-            self.A: actions,
-            self.ADV : advs,
-            self.R : returns,
-            self.LR : lr,
-            self.CLIPRANGE: cliprange,
-            self.OLDNEGLOGPAC: neglogpacs,
-            self.OLDVPRED: values,
-        }
-        if states is not None:
-            td_map[self.train_model.S] = states
-            td_map[self.train_model.M] = masks
-        return self.sess.run(
-            self.stats_list + [self._train_op],
-            td_map
-        )[:-1]
-    def assign_v(self):
-        self.sess.run(self.assign)
-def get_variables(scope):
-    return tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope)
+    load_path: str                    path to load the model from
+
+    **network_kwargs:                 keyword arguments to the policy / network builder. See baselines.common/policies.py/build_policy and arguments to a particular type of network
+                                      For instance, 'mlp' network architecture has arguments num_hidden and num_layers.
+
+    '''
+
+    set_global_seeds(seed)
+
+    if isinstance(lr, float): lr = constfn(lr)
+    else: assert callable(lr)
+    if isinstance(cliprange, float): cliprange = constfn(cliprange)
+    else: assert callable(cliprange)
+    total_timesteps = int(total_timesteps)
+
+    policy = build_policy(env, network, **network_kwargs)
+
+    # Get the nb of env
+    nenvs = env.num_envs
+
+    # Calculate the batch_size
+    nbatch = nenvs * nsteps
+    nbatch_train = nbatch // nminibatches
+    is_mpi_root = (MPI is None or MPI.COMM_WORLD.Get_rank() == 0)
+
+    # Instantiate the model object (that creates act_model and train_model)
+    if model_fn is None:
+        from baselines.p3o.model import Model
+        model_fn = Model
+
+    model = model_fn(policy=policy, nbatch_act=nenvs, nbatch_train=nbatch_train,
+                    nsteps=nsteps, ent_coef=ent_coef, kl_coef=kl_coef, vf_coef=vf_coef, tau=tau,
+                    max_grad_norm=max_grad_norm, comm=comm, mpi_rank_weight=mpi_rank_weight)
+
+    if load_path is not None:
+        model.load(load_path)
+    # Instantiate the runner object
+    runner = Runner(env=env, model=model, nsteps=nsteps, gamma=gamma, lam=lam)
+    if eval_env is not None:
+        eval_runner = Runner(env = eval_env, model = model, nsteps = nsteps, gamma = gamma, lam= lam)
+
+    epinfobuf = deque(maxlen=100)
+    if eval_env is not None:
+        eval_epinfobuf = deque(maxlen=100)
+
+    if init_fn is not None:
+        init_fn()
+
+    # Start total timer
+    tfirststart = time.perf_counter()
+
+    nupdates = total_timesteps//nbatch
+    for update in range(1, nupdates+1):
+        assert nbatch % nminibatches == 0
+        # Start timer
+        tstart = time.perf_counter()
+        frac = 1.0 - (update - 1.0) / nupdates
+        # Calculate the learning rate
+        lrnow = lr(frac)
+        cliprangenow = cliprange(frac)
+
+        if update % log_interval == 0 and is_mpi_root: logger.info('Stepping environment...')
+
+        # Get minibatch
+        obs, returns, masks, actions, values, neglogpacs, states, epinfos = runner.run() #pylint: disable=E0632
+        if eval_env is not None:
+            eval_obs, eval_returns, eval_masks, eval_actions, eval_values, eval_neglogpacs, eval_states, eval_epinfos = eval_runner.run() #pylint: disable=E0632
+
+        if update % log_interval == 0 and is_mpi_root: logger.info('Done.')
+
+        epinfobuf.extend(epinfos)
+        # print(epinfobuf)
+        if eval_env is not None:
+            eval_epinfobuf.extend(eval_epinfos)
+
+        mblossvals = []
+
+        if states is None: # nonrecurrent version
+            # Index of each element of batch_size
+            # Create the indices array
+            inds = np.arange(nbatch)
+            model.assign_v()
+            for _ in range(noptepochs):
+                # Randomize the indexes
+                np.random.shuffle(inds)
+                for start in range(0, nbatch, nbatch_train):
+                    end = start + nbatch_train
+                    mbinds = inds[start:end]
+                    slices = (arr[mbinds] for arr in (obs, returns, masks, actions, values, neglogpacs))
+                    res = model.train(lrnow, cliprangenow, *slices)
+                    mblossvals.append(res)
+
+        else: # recurrent version
+            assert nenvs % nminibatches == 0
+            envsperbatch = nenvs // nminibatches
+            envinds = np.arange(nenvs)
+            flatinds = np.arange(nenvs * nsteps).reshape(nenvs, nsteps)
+            for _ in range(noptepochs):
+                np.random.shuffle(envinds)
+                for start in range(0, nenvs, envsperbatch):
+                    end = start + envsperbatch
+                    mbenvinds = envinds[start:end]
+                    mbflatinds = flatinds[mbenvinds].ravel()
+                    slices = (arr[mbflatinds] for arr in (obs, returns, masks, actions, values, neglogpacs))
+                    mbstates = states[mbenvinds]
+                    mblossvals.append(model.train(lrnow, cliprangenow, *slices, mbstates))
+
+        # Feedforward --> get losses --> update
+        lossvals = np.mean(mblossvals, axis=0)
+        # End timer
+        tnow = time.perf_counter()
+        # Calculate the fps (frame per second)
+        fps = int(nbatch / (tnow - tstart))
+
+        if update_fn is not None:
+            update_fn(update)
+
+        if update % log_interval == 0 or update == 1:
+            # Calculates if value function is a good predicator of the returns (ev > 1)
+            # or if it's just worse than predicting nothing (ev =< 0)
+            ev = explained_variance(values, returns)
+            logger.logkv("misc/serial_timesteps", update*nsteps)
+            logger.logkv("misc/nupdates", update)
+            logger.logkv("misc/total_timesteps", update*nbatch)
+            logger.logkv("fps", fps)
+            logger.logkv("misc/explained_variance", float(ev))
+            logger.logkv('eprewmean', safemean([epinfo['r'] for epinfo in epinfobuf]))
+            logger.logkv('eplenmean', safemean([epinfo['l'] for epinfo in epinfobuf]))
+            if eval_env is not None:
+                logger.logkv('eval_eprewmean', safemean([epinfo['r'] for epinfo in eval_epinfobuf]) )
+                logger.logkv('eval_eplenmean', safemean([epinfo['l'] for epinfo in eval_epinfobuf]) )
+            logger.logkv('misc/time_elapsed', tnow - tfirststart)
+            for (lossval, lossname) in zip(lossvals, model.loss_names):
+                logger.logkv('loss/' + lossname, lossval)
+
+            logger.dumpkvs()
+
+    return model
+# Avoid division error when calculate the mean (in our case if epinfo is empty returns np.nan, not return an error)
+def safemean(xs):
+    return np.nan if len(xs) == 0 else np.mean(xs)
+
+
+
