@@ -24,8 +24,8 @@ class Model(object):
     save/load():
     - Save load the model
     """
-    def __init__(self, *, policy, ob_space, ac_space, nbatch_act, nbatch_train,
-                nsteps, ent_coef, kl_coef, vf_coef, max_grad_norm, mpi_rank_weight=1, comm=None, microbatch_size=None):
+    def __init__(self, *, policy, nbatch_act, nbatch_train,
+                nsteps, ent_coef, kl_coef, vf_coef, tau, max_grad_norm, mpi_rank_weight=1, comm=None, microbatch_size=None):
         self.sess = sess = get_session()
 
         if MPI is not None and comm is None:
@@ -58,8 +58,7 @@ class Model(object):
         # Cliprange
         self.CLIPRANGE = CLIPRANGE = tf.placeholder(tf.float32, [])
         self.OLDVPRED = OLDVPRED = tf.placeholder(tf.float32, [None])
-        self.BETA = BETA = tf.placeholder(tf.float32, [])
-        self.TAU = TAU = tf.placeholder(tf.float32, [])
+        self.TAU = None
 
         self.assign = [tf.assign(oldv, newv)
         for (oldv, newv) in zip(get_variables("oldpi"), get_variables("model"))]
@@ -70,30 +69,29 @@ class Model(object):
         # Entropy is used to improve exploration by limiting the premature convergence to suboptimal policy.
         entropy = tf.reduce_mean(train_model.pd.entropy())
 
-        # CALCULATE THE LOSS
-        # Total loss = Policy gradient loss - entropy * entropy coefficient + Value coefficient * value loss
 
         # Clip the value to reduce variability during Critic training
         # Get the predicted value
         vpred = train_model.vf
-        # vpred2 = train_model.vf2
-
         vpredclipped = tf.clip_by_value(train_model.vf - OLDVPRED, - CLIPRANGE, CLIPRANGE) + OLDVPRED
         # Unclipped value
-
         vf_clip_losses = tf.square(vpredclipped - R)
         # Clipped value
         vf_losses = tf.square(vpred - R)
 
-        vf_loss = .1 * tf.reduce_mean(tf.maximum(vf_losses, vf_clip_losses))
-        # vf_loss = .5 * tf.reduce_mean(vf_losses)
+        vf_loss = tf.reduce_mean(tf.maximum(vf_losses, vf_clip_losses))*0.5
 
         # Calculate ratio (pi current policy / pi old policy)
         ratio = tf.exp(OLDNEGLOGPAC - neglogpac)
 
         fr_kl_loss = kl_coef*oldpi.pd.kl(train_model.pd)
+        # fr_kl_loss = kl_coef * train_model.pd.kl(oldpi.pd)
 
-        pg_losses2 = -ADV*(4.0/self.TAU)*tf.sigmoid(ratio*self.TAU - self.TAU)
+        # tau1 need to be great than or equal to 2 to make soft-clip objective is a lower bound of the original one
+        # tau2 control the effective gradient span,
+        # to get accelerate effect, by setting 0.5*.5*4/tau1*tau2 >1
+
+        pg_losses2 = -ADV*(4.0/tau)*tf.sigmoid(ratio*tau - tau) # soft clip objective
 
         # gradient_r_scpi = tf.reduce_mean(-ADV*4*tf.sigmoid(4*ratio - 4)*(1-tf.sigmoid(4*ratio - 4)))
 
@@ -143,7 +141,6 @@ class Model(object):
         self.loss_names = ['policy_loss', 'value_loss', 'policy_entropy', 'approxkl', 'clipfrac', 'rAt',"unnormal_pt", 'unnormal_nt']
         self.stats_list = [pg_loss, vf_loss, entropy, approxkl, clipfrac, rAt, unnormal_pt, unnormal_nt]
 
-
         self.train_model = train_model
         self.act_model = act_model
         self.step = act_model.step
@@ -158,7 +155,7 @@ class Model(object):
         if MPI is not None:
             sync_from_root(sess, global_variables, comm=comm) #pylint: disable=E1101
 
-    def train(self, lr, tau, cliprange, beta, obs, returns, masks, actions, values, neglogpacs, states=None):
+    def train(self, lr, cliprange, obs, returns, masks, actions, values, neglogpacs, states=None):
         # Here we calculate advantage A(s,a) = R + yV(s') - V(s)
         # Returns = R + yV(s')
         advs = returns - values
@@ -173,10 +170,8 @@ class Model(object):
             self.R : returns,
             self.LR : lr,
             self.CLIPRANGE: cliprange,
-            self.BETA: beta,
-            self.OLDNEGLOGPAC : neglogpacs,
+            self.OLDNEGLOGPAC: neglogpacs,
             self.OLDVPRED: values,
-            self.TAU: tau,
         }
         if states is not None:
             td_map[self.train_model.S] = states
