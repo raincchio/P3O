@@ -26,7 +26,7 @@ def betafn(val):
 
 def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2048, ent_coef=0.0, kl_coef=1.0, lr=3e-4,
             vf_coef=0.5,  max_grad_norm=0.5, gamma=0.99, lam=0.95,
-            log_interval=10, nminibatches=4, noptepochs=4, cliprange=0.2, beta=15,
+            log_interval=10, nminibatches=4, noptepochs=4, cliprange=0.2, tau=4,
             save_interval=0, load_path=None, model_fn=None, update_fn=None, init_fn=None, mpi_rank_weight=1, comm=None, **network_kwargs):
     '''
     Learn policy using SPG algorithm
@@ -87,18 +87,12 @@ def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2
     else: assert callable(lr)
     if isinstance(cliprange, float): cliprange = constfn(cliprange)
     else: assert callable(cliprange)
-    if isinstance(beta, int): beta = betafn(beta)
-    else: assert callable(beta)
     total_timesteps = int(total_timesteps)
 
     policy = build_policy(env, network, **network_kwargs)
 
     # Get the nb of env
     nenvs = env.num_envs
-
-    # Get state_space and action_space
-    ob_space = env.observation_space
-    ac_space = env.action_space
 
     # Calculate the batch_size
     nbatch = nenvs * nsteps
@@ -110,8 +104,8 @@ def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2
         from baselines.p3o.model import Model
         model_fn = Model
 
-    model = model_fn(policy=policy, ob_space=ob_space, ac_space=ac_space, nbatch_act=nenvs, nbatch_train=nbatch_train,
-                    nsteps=nsteps, ent_coef=ent_coef, kl_coef=kl_coef, vf_coef=vf_coef,
+    model = model_fn(policy=policy, nbatch_act=nenvs, nbatch_train=nbatch_train,
+                    nsteps=nsteps, ent_coef=ent_coef, kl_coef=kl_coef, vf_coef=vf_coef, tau=tau,
                     max_grad_norm=max_grad_norm, comm=comm, mpi_rank_weight=mpi_rank_weight)
 
     if load_path is not None:
@@ -139,11 +133,7 @@ def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2
         frac = 1.0 - (update - 1.0) / nupdates
         # Calculate the learning rate
         lrnow = lr(frac)
-        # taunow = 2+2*(1-frac)
-        taunow = 4
-        # Calculate the cliprange
         cliprangenow = cliprange(frac)
-        betanow = beta(frac)
 
         if update % log_interval == 0 and is_mpi_root: logger.info('Stepping environment...')
 
@@ -169,14 +159,11 @@ def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2
             for _ in range(noptepochs):
                 # Randomize the indexes
                 np.random.shuffle(inds)
-                # 0 to batch_size with batch_train_size step
                 for start in range(0, nbatch, nbatch_train):
                     end = start + nbatch_train
                     mbinds = inds[start:end]
                     slices = (arr[mbinds] for arr in (obs, returns, masks, actions, values, neglogpacs))
-                    # print(lrnow, cliprangenow)
-                    res = model.train(lrnow, taunow, cliprangenow, betanow, *slices)
-                    # print(res[4].item())
+                    res = model.train(lrnow, cliprangenow, *slices)
                     mblossvals.append(res)
 
         else: # recurrent version
