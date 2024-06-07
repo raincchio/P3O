@@ -57,3 +57,17 @@ python3 -u -m baselines.run --alg=p3o --num_env=1 --seed=1 --env=HalfCheetah-v2 
 --load_path=./HalfCheetah/p3o_s-1_no-5_minib-64_kl-0.01_model --play
 ```
 
+If you like the idea of this paper or if this code has been helpful to you, please consider citing our paper.
+```
+@inproceedings{chen2023sufficiency,
+  title={The sufficiency of off-policyness and soft clipping: PPO is still insufficient according to an off-policy measure},
+  author={Chen, Xing and Diao, Dongcui and Chen, Hechang and Yao, Hengshuai and Piao, Haiyin and Sun, Zhixiao and Yang, Zhiwei and Goebel, Randy and Jiang, Bei and Chang, Yi},
+  booktitle={Proceedings of the AAAI Conference on Artificial Intelligence},
+  volume={37},
+  number={6},
+  pages={7078--7086},
+  year={2023}
+}
+```
+
+
