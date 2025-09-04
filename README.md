@@ -8,6 +8,12 @@ Our code is based on the OpenAI's baseline.[https://github.com/openai/baselines]
 sudo apt-get install libglew-dev patchelf
 ```
 
+## prepare cuda, cudnn and gcc
+```bash
+conda install cudatoolkit=10.0 cudnn=7
+conda install -c conda-forge gcc=12.1.0
+```
+
 ## install mujuco
 
 Download MuJoCo[https://github.com/deepmind/mujoco/releases]
@@ -27,7 +33,6 @@ mv mujoco210 ~/.mujoco
 ```bash
 conda create -n p3o python=3.6
 conda activate p3o
-conda install tensorflow-gpu==1.13.0
 pip install -r requirements.txt
 ```
 ## install mujoco-py
