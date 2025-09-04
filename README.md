@@ -18,10 +18,10 @@ conda install -c conda-forge gcc=12.1.0
 
 Download MuJoCo[https://github.com/deepmind/mujoco/releases]
 
-For example, we can downloand mujoco210-linux-x86_64.tar.gz for linux
+For example, we can downloand mujoco200-linux-x86_64.tar.gz[https://www.roboti.us/download/mujoco200_linux.zip] for linux
 
 ```bash
-tar -xvf  mujoco210-linux-x86_64.tar.gz
+tar -xvf  mujoco200-linux-x86_64.tar.gz
 cd  mujoco210-linux-x86_64
 mkdir ~/.mujoco
 mv mujoco210 ~/.mujoco
