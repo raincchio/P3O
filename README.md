@@ -57,7 +57,7 @@ pip install -r requirements.txt
 ## install mujoco-py
 
 ```bash
-pip download mujoco-py==2.0.2.13
+pip download mujoco-py==2.0.2.13 --no-deps
 tar -xf mujoco*
 cd mujoc*
 python setup.py install
