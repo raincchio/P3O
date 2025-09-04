@@ -20,9 +20,9 @@ For example, we can downloand mujoco200-linux-x86_64.tar.gz[https://www.roboti.u
 
 ```bash
 tar -xvf  mujoco200-linux-x86_64.tar.gz
-cd  mujoco210-linux-x86_64
+cd  mujoco200-linux-x86_64
 mkdir ~/.mujoco
-mv mujoco210 ~/.mujoco
+mv mujoco200 ~/.mujoco
 cd ~/.mujoco
 
 cat <<EOF > license.txt
