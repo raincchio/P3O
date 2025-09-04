@@ -25,7 +25,7 @@ mkdir ~/.mujoco
 mv mujoco200 ~/.mujoco
 cd ~/.mujoco
 
-cat <<EOF > license.txt
+cat <<EOF > mjkey.txt
 MuJoCo Pro Individual license activation key, number 7777, type 6.
 
 Issued to Everyone.
