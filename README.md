@@ -23,13 +23,22 @@ mv mujoco210 ~/.mujoco
 ```
 
 
-## create virtual env using Miniconda
+## create virtual env with Miniconda
 ```bash
 conda create -n p3o python=3.6
-conda active p3o
+conda activate p3o
 conda install tensorflow-gpu==1.13.0
 pip install -r requirements.txt
 ```
+## install mujoco-py
+
+```bash
+pip download mujoco-py==2.0.2.13
+tar -xf mujoco*
+cd mujoc*
+python setup.py install
+```
+
 ## run experiments
 For example, train P3O for HalfCheetah-v2
 ```bash
