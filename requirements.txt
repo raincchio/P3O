@@ -1,5 +1,8 @@
 Cython==0.29.26
 gym==0.17.3
-mujoco-py==2.0.2.13
-tensorflow-gpu==1.13.2
-opencv-python
+opencv-python==4.0.1.23
+Pillow==8.4.0
+cffi==1.15.1
+glfw==1.4.0
+imageio==2.1.2
+fasteners==0.20
